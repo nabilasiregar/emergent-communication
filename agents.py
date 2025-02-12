@@ -46,9 +46,6 @@ class ReceiverAgent(nn.Module):
         self.fc = nn.Linear(gnn_out_channels, num_nodes)
 
     def forward(self, data, message, labels=None):
-        print("ReceiverAgent input type:", type(data))
-        if not isinstance(data, torch_geometric.data.Data):
-            raise TypeError("Expected data to be of type torch_geometric.data.Data, received type: {}".format(type(data)))
         # encode the graph
         node_embeddings = self.encoder(data)
         global_graph_embedding = torch.mean(node_embeddings, dim=0)  # shape: [gnn_out_channels]

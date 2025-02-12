@@ -75,10 +75,7 @@ class Environment:
         directions = {node: self.graph.nodes[node]['direction'] for node in self.graph.nodes()}
         colors = {'Nest': 'gold', 'Food': 'red', 'Distractor': 'skyblue'}
 
-        # Label nodes with type and direction.
         labels = {node: f"{types[node]} ({directions[node]})" for node in self.graph.nodes()}
-
-        # Label edges with their distance.
         edge_labels = {(u, v): f"{self.graph[u][v]['distance']:.1f}m" for u, v in self.graph.edges()}
 
         nx.draw(self.graph,
@@ -93,5 +90,5 @@ class Environment:
         plt.show()
 
 if __name__ == '__main__':
-    env = Environment(num_distractors=4)
+    env = Environment(num_distractors=2)
     env.visualize_environment()

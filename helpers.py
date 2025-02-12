@@ -3,6 +3,7 @@ from torch_geometric.data import Data
 import networkx as nx
 import pdb
 
+
 def convert_graph_to_tensors(graph):
     """
     Convert a NetworkX graph with node and edge attributes to a PyTorch Geometric Data object.
@@ -71,11 +72,6 @@ def convert_graph_to_tensors(graph):
     edge_attr = torch.tensor(edge_features, dtype=torch.float) if edge_features else None
 
     data = Data(x=x, edge_index=edge_index, edge_attr=edge_attr)
-
-    global GLOBAL_EDGE_INDEX, GLOBAL_EDGE_ATTR
-    GLOBAL_EDGE_INDEX = edge_index
-    GLOBAL_EDGE_ATTR = edge_attr
-    
     return data
 
 if __name__ == '__main__':

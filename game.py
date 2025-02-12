@@ -44,28 +44,28 @@ if __name__ == '__main__':
     # ---------------
     # Gumbel-Softmax
     # ---------------
-    sender = SenderAgent(gnn_in_channels, gnn_hidden_channels, gnn_out_channels,
-                         message_vocab_size, message_length)
-    sender = core.GumbelSoftmaxWrapper(sender, temperature=1.0)
-    
-    receiver = ReceiverAgent(gnn_in_channels, gnn_hidden_channels, gnn_out_channels,
-                             message_vocab_size, message_length, num_nodes)
-    receiver = core.SymbolReceiverWrapper(receiver, message_vocab_size, agent_input_size=gnn_out_channels)
-    game = core.SymbolGameGS(sender, receiver, loss_function)
-
-    # ------------
-    # Reinforce
-    # ------------
     # sender = SenderAgent(gnn_in_channels, gnn_hidden_channels, gnn_out_channels,
     #                      message_vocab_size, message_length)
-    # sender = core.ReinforceWrapper(sender)
+    # sender = core.GumbelSoftmaxWrapper(sender, temperature=1.0)
     
     # receiver = ReceiverAgent(gnn_in_channels, gnn_hidden_channels, gnn_out_channels,
     #                          message_vocab_size, message_length, num_nodes)
     # receiver = core.SymbolReceiverWrapper(receiver, message_vocab_size, agent_input_size=gnn_out_channels)
-    # receiver = core.ReinforceDeterministicWrapper(receiver)
-    # game = core.SymbolGameReinforce(sender, receiver, loss_function,
-    #                                 sender_entropy_coeff=0.05, receiver_entropy_coeff=0.0)
+    # game = core.SymbolGameGS(sender, receiver, loss_function)
+
+    # ------------
+    # Reinforce
+    # ------------
+    sender = SenderAgent(gnn_in_channels, gnn_hidden_channels, gnn_out_channels,
+                         message_vocab_size, message_length)
+    sender = core.ReinforceWrapper(sender)
+    
+    receiver = ReceiverAgent(gnn_in_channels, gnn_hidden_channels, gnn_out_channels,
+                             message_vocab_size, message_length, num_nodes)
+    receiver = core.SymbolReceiverWrapper(receiver, message_vocab_size, agent_input_size=gnn_out_channels)
+    receiver = core.ReinforceDeterministicWrapper(receiver)
+    game = core.SymbolGameReinforce(sender, receiver, loss_function,
+                                    sender_entropy_coeff=0.05, receiver_entropy_coeff=0.0)
     # ------------------------------
     # Optimizer and Simple Training Loop
     # ------------------------------
