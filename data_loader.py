@@ -4,7 +4,7 @@ import networkx as nx
 import pdb
 
 
-def convert_graph_to_tensors(graph):
+def get_dataloader(graph):
     """
     Convert a NetworkX graph with node and edge attributes to a PyTorch Geometric Data object.
     
@@ -27,26 +27,12 @@ def convert_graph_to_tensors(graph):
         'Food': [0, 1, 0],
         'Distractor': [0, 0, 1]
     }
-
-    directions_list = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
     
     for node in range(num_nodes):
         node_data = graph.nodes[node]
-        # get type feature; default to Distractor if type is missing
+        # get type feature, default to Distractor if type is missing
         type_feat = type_mapping.get(node_data.get('type', 'Distractor'), [0, 0, 1])
-        
-        # get direction feature as a one-hot vector for 8 possible directions
-        direction_feat = [0] * 8
-        direction = node_data.get('direction', None)
-        if direction in directions_list:
-            idx = directions_list.index(direction)
-            direction_feat[idx] = 1
-        else:
-            # if no valid direction is provided, leave the one-hot vector as all zeros
-            pass
-
-        node_features.append(type_feat + direction_feat)
-
+        node_features.append(type_feat)
     # create a tensor for node features
     x = torch.tensor(node_features, dtype=torch.float)
 
@@ -57,18 +43,25 @@ def convert_graph_to_tensors(graph):
     for u, v in edges:
         src_nodes.append(u)
         dst_nodes.append(v)
-        # in an undirected graph, each edge in NetworkX appears only once but for PyG, 
-        # we add both directions to ensure every node receives messages from all its neighbors
         src_nodes.append(v)
         dst_nodes.append(u)
     edge_index = torch.tensor([src_nodes, dst_nodes], dtype=torch.long)
 
     # build edge features (edge_attr)
     edge_features = []
+    directions_list = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
     for u, v in edges:
         distance = graph[u][v].get('distance', 0.0)
-        edge_features.append([distance])
-        edge_features.append([distance])
+        direction = graph[u][v].get('direction', None)
+        # get direction feature as a one-hot vector for 8 possible directions
+        direction_feat = [0] * 8
+        if direction in directions_list:
+            idx = directions_list.index(direction)
+            direction_feat[idx] = 1
+        # combine the distance with the direction
+        feature_vector = [distance] + direction_feat
+        edge_features.append(feature_vector)
+        edge_features.append(feature_vector)
     edge_attr = torch.tensor(edge_features, dtype=torch.float) if edge_features else None
 
     data = Data(x=x, edge_index=edge_index, edge_attr=edge_attr)
@@ -83,12 +76,12 @@ if __name__ == '__main__':
     except ImportError:
         print("environment.py not found")
     
-    pyg_data = convert_graph_to_tensors(G)
+    pyg_data = get_dataloader(G)
     
     print("PyG Data object:")
     print("Node features (x):")
     print(pyg_data.x)
-    print("\nEdge index:")
+    print("\nConnection between nodes (edge index):")
     print(pyg_data.edge_index)
     if pyg_data.edge_attr is not None:
         print("\nEdge attributes (edge_attr):")

@@ -1,85 +1,63 @@
-import torch
-import torch.nn as nn
+import argparse
 import torch.optim as optim
 import egg.core as core
-from agents import SenderAgent, ReceiverAgent
-from helpers import convert_graph_to_tensors
+from agents import GraphSender, GraphReceiver
+from torch.utils.data import DataLoader
+from data_loader import get_dataloader
 from environment import Environment
-from torch_geometric.data import Batch
 import pdb
 
-def loss_function(receiver_logits, target):
-    criterion = nn.CrossEntropyLoss()
-    # cross-entropy on receiver logits vs the target index
-    return criterion(receiver_logits.unsqueeze(0), target)
-
-if __name__ == '__main__':
-    # ------------------------------
-    # Hyperparameters and Setup
-    # ------------------------------
-    # GNN feature dimensions
-    gnn_in_channels = 11 # 3 (node type one-hot) + 8 (direction one-hot)
-    gnn_hidden_channels = 16
-    gnn_out_channels = 16
-
-    # Communication channel parameters
-    message_vocab_size = 10   # vocab size for messages
-    message_length = 5        # num of tokens per message
-
-    # Hyperparameters
-    lr = 0.001
-    num_epochs = 20
-
-    # Create the environment and convert its graph to a PyG Data object
-    env = Environment(num_distractors=3)
-    data = convert_graph_to_tensors(env.graph)
-    print("Type of data:", type(data))
-
-    batched_data = Batch.from_data_list([data])
-
-    # Node 0 is the Nest, Node 1 is the Food (target)
-    target = torch.tensor([1])
-    num_nodes = env.graph.number_of_nodes()
-
-    # ---------------
-    # Gumbel-Softmax
-    # ---------------
-    # sender = SenderAgent(gnn_in_channels, gnn_hidden_channels, gnn_out_channels,
-    #                      message_vocab_size, message_length)
-    # sender = core.GumbelSoftmaxWrapper(sender, temperature=1.0)
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--embedding_size", type=int, default=16, help="Size of the embedding layer")
+    parser.add_argument("--hidden_size", type=int, default=32, help="Size of the hidden layers")
+    parser.add_argument("--vocab_size", type=int, default=8, help="Size of the vocabulary")
+    parser.add_argument("--game_size", type=int, default=1, help="Size of the game (number of agents)")
+    parser.add_argument("--feat_size", type=int, default=12, help="Size of the feature vectors")
+    parser.add_argument("--num_classes", type=int, default=3, help="Number of classes for classification")
+    parser.add_argument("--temp", type=float, default=1.0, help="Temperature parameter for Gumbel-Softmax")
+    parser.add_argument(
+        "--mode",
+        type=str,
+        choices=['rf', 'gs'],
+        default="rf",
+        help="Training mode: Gumbel-Softmax (gs) or Reinforce (rf)"
+    )
+    parser.add_argument("--n_epochs", type=int, default=3, help="Number of training epochs")
+    parser.add_argument("--batch_size", type=int, default=1, help="Batch size for training")
     
-    # receiver = ReceiverAgent(gnn_in_channels, gnn_hidden_channels, gnn_out_channels,
-    #                          message_vocab_size, message_length, num_nodes)
-    # receiver = core.SymbolReceiverWrapper(receiver, message_vocab_size, agent_input_size=gnn_out_channels)
-    # game = core.SymbolGameGS(sender, receiver, loss_function)
+    args = parser.parse_args()
+    return args
 
-    # ------------
-    # Reinforce
-    # ------------
-    sender = SenderAgent(gnn_in_channels, gnn_hidden_channels, gnn_out_channels,
-                         message_vocab_size, message_length)
-    sender = core.ReinforceWrapper(sender)
+def play(opts):
+    env = Environment(num_distractors=2)
+    graph_data = get_dataloader(env.graph)
+    dataloader = DataLoader(graph_data, batch_size=opts.batch_size, shuffle=True)
+
+    sender = GraphSender(opts.game_size, opts.feat_size, opts.embedding_size, opts.hidden_size, opts.vocab_size, opts.temp)
+    receiver = GraphReceiver(opts.game_size, opts.feat_size, opts.embedding_size, opts.vocab_size, reinforce=(opts.mode == "rf"))
     
-    receiver = ReceiverAgent(gnn_in_channels, gnn_hidden_channels, gnn_out_channels,
-                             message_vocab_size, message_length, num_nodes)
-    receiver = core.SymbolReceiverWrapper(receiver, message_vocab_size, agent_input_size=gnn_out_channels)
-    receiver = core.ReinforceDeterministicWrapper(receiver)
-    game = core.SymbolGameReinforce(sender, receiver, loss_function,
-                                    sender_entropy_coeff=0.05, receiver_entropy_coeff=0.0)
-    # ------------------------------
-    # Optimizer and Simple Training Loop
-    # ------------------------------
-    optimizer = optim.Adam(game.parameters(), lr=lr)
-    
-    for epoch in range(num_epochs):
-        optimizer.zero_grad()
-        print("Before sending to game:", type(batched_data))
-        receiver_logits, message_indices = game(batched_data, target)
-        print("After game and before loss calculation:", type(batched_data))
-        loss = loss_function(receiver_logits, target)
-        loss.backward()
-        optimizer.step()
-        
-        if epoch % 10 == 0:
-            print(f"Epoch {epoch}, Loss: {loss.item()}")
-            print("Sender's message:", message_indices)
+    def loss(_sender_input, _message, _receiver_input, receiver_output, labels, _aux_input):
+        return torch.nn.functional.nll_loss(receiver_output, labels)
+
+    if opts.mode == "rf":
+        sender = core.ReinforceWrapper(sender)
+        receiver = core.ReinforceWrapper(receiver)
+        game = core.SymbolGameReinforce(sender, receiver, loss)
+    elif opts.mode == "gs":
+        sender = core.GumbelSoftmaxWrapper(sender, temperature=opts.temp)
+        receiver = core.GumbelSoftmaxWrapper(receiver, temperature=opts.temp)
+        game = core.SymbolGameGS(sender, receiver, loss)
+  
+    trainer = core.Trainer(
+        game=game,
+        optimizer=optim.Adam(list(sender.parameters()) + list(receiver.parameters()), lr=0.001),
+        train_data=dataloader,
+        validation_data=None,
+        callbacks=[core.ConsoleLogger()]
+    )
+    trainer.train()
+
+if __name__ == "__main__":
+    opts = parse_arguments()
+    play(opts)

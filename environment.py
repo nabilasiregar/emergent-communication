@@ -17,19 +17,18 @@ class Environment:
         # create the nest node
         self.graph.add_node(0,
                             position=self.nest_position,
-                            type='Nest',
-                            direction='Center')
+                            type='Nest')
 
         # create the food node
         food_position = self.random_position()
         food_direction = self.calculate_direction(self.nest_position, food_position)
         self.graph.add_node(1,
                             position=food_position,
-                            type='Food',
-                            direction=food_direction)
+                            type='Food')
         self.graph.add_edge(0, 1)
         distance = self.calculate_distance(self.nest_position, food_position)
         self.graph[0][1]['distance'] = distance
+        self.graph[0][1]['direction'] = food_direction
 
         # create distractor nodes
         for node_index in range(2, num_distractors + 2):
@@ -37,11 +36,11 @@ class Environment:
             direction = self.calculate_direction(self.nest_position, pos)
             self.graph.add_node(node_index,
                                 position=pos,
-                                type='Distractor',
-                                direction=direction)
+                                type='Distractor')
             self.graph.add_edge(0, node_index)
             distance = self.calculate_distance(self.nest_position, pos)
             self.graph[0][node_index]['distance'] = distance
+            self.graph[0][node_index]['direction'] = direction
 
     def random_position(self):
         """Generates a random (x, y) position"""
@@ -72,11 +71,17 @@ class Environment:
         """Visualizes the environment using matplotlib and networkx."""
         pos = {node: self.graph.nodes[node]['position'] for node in self.graph.nodes()}
         types = {node: self.graph.nodes[node]['type'] for node in self.graph.nodes()}
-        directions = {node: self.graph.nodes[node]['direction'] for node in self.graph.nodes()}
         colors = {'Nest': 'gold', 'Food': 'red', 'Distractor': 'skyblue'}
 
-        labels = {node: f"{types[node]} ({directions[node]})" for node in self.graph.nodes()}
-        edge_labels = {(u, v): f"{self.graph[u][v]['distance']:.1f}m" for u, v in self.graph.edges()}
+        labels = {node: f"{types[node]}" for node in self.graph.nodes()}
+        edge_labels = {}
+        for u, v in self.graph.edges():
+            distance = self.graph[u][v].get('distance', None)
+            direction = self.graph[u][v].get('direction', "")
+            if distance is not None:
+                edge_labels[(u, v)] = f"({direction}) {distance:.1f}m"
+            else:
+                edge_labels[(u, v)] = f"{direction}"
 
         nx.draw(self.graph,
                 pos,

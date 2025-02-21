@@ -1,60 +1,122 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch_geometric.nn as pyg_nn
-import torch_geometric
+from torch_geometric.nn import NNConv, global_mean_pool
+from data_loader import get_dataloader
+from environment import Environment
 
-class GraphEncoder(nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels):
-        super().__init__()
-        self.conv1 = pyg_nn.GCNConv(in_channels, hidden_channels)
-        self.conv2 = pyg_nn.GCNConv(hidden_channels, out_channels)
+class GraphSender(nn.Module):
+    def __init__(self, feat_size, embedding_size, hidden_size, vocab_size=12, temp=1.0, edge_attr_dim=9):
+        super(GraphSender, self).__init__()
+        self.embedding_size = embedding_size
+        self.hidden_size = hidden_size
+        self.vocab_size = vocab_size
+        self.temp = temp
 
-    def forward(self, data):
-        x, edge_index = data.x, data.edge_index
-        x = self.conv1(x, edge_index)
-        x = F.relu(x)
-        x = self.conv2(x, edge_index)
-        return x
+        self.edge_nn1 = nn.Sequential(
+            nn.Linear(edge_attr_dim, 32),
+            nn.ReLU(),
+            nn.Linear(32, feat_size * embedding_size)
+        )
+        self.conv1 = NNConv(feat_size, embedding_size, self.edge_nn1, aggr='mean')
 
-class SenderAgent(nn.Module):
-    def __init__(self, gnn_in_channels, gnn_hidden_channels, gnn_out_channels,
-                 message_vocab_size, message_length):
-        super().__init__()
-        self.encoder = GraphEncoder(gnn_in_channels, gnn_hidden_channels, gnn_out_channels)
-        # for a discrete channel, produce logits for each token in the vocabulary per message slot
-        self.message_length = message_length
-        self.fc = nn.Linear(gnn_out_channels, message_vocab_size * message_length)
-        self.message_vocab_size = message_vocab_size
+        self.edge_nn2 = nn.Sequential(
+            nn.Linear(edge_attr_dim, 32),
+            nn.ReLU(),
+            nn.Linear(32, embedding_size * hidden_size)
+        )
+        self.conv2 = NNConv(embedding_size, hidden_size, self.edge_nn2, aggr='mean')
 
-    def forward(self, data, labels=None):
-        node_embeddings = self.encoder(data)  # shape: [num_nodes, gnn_out_channels]
-        global_embedding = torch.mean(node_embeddings, dim=0)  # shape: [gnn_out_channels]
-        message_logits = self.fc(global_embedding)  # shape: [message_vocab_size * message_length]
-        message_logits = message_logits.view(self.message_length, self.message_vocab_size)
-        return message_logits  # these logits can be turned into discrete tokens via Gumbel-Softmax
+        self.lin = nn.Linear(hidden_size, vocab_size)
 
-class ReceiverAgent(nn.Module):
-    def __init__(self, gnn_in_channels, gnn_hidden_channels, gnn_out_channels,
-                 message_vocab_size, message_length, num_nodes):
-        super().__init__()
-        self.encoder = GraphEncoder(gnn_in_channels, gnn_hidden_channels, gnn_out_channels)
-        # embedding layer for interpreting the discrete message tokens
-        self.message_embedding = nn.Embedding(message_vocab_size, gnn_out_channels)
-        self.message_length = message_length
-        # final classifier: outputs logits over the nodes (to select Food among nodes)
-        self.fc = nn.Linear(gnn_out_channels, num_nodes)
+    def forward(self, x, _aux_input=None):
+        graph = _aux_input["graph_data"]
+        node_features = graph.x
+        edge_index = graph.edge_index
+        edge_attr = graph.edge_attr
 
-    def forward(self, data, message, labels=None):
-        # encode the graph
-        node_embeddings = self.encoder(data)
-        global_graph_embedding = torch.mean(node_embeddings, dim=0)  # shape: [gnn_out_channels]
-        # decode the message
-        message_embeds = self.message_embedding(message)  # shape: [message_length, gnn_out_channels]
-        # aggregate message embeddings
-        message_rep = torch.mean(message_embeds, dim=0)  # shape: [gnn_out_channels]
-        # combine the message representation with the global graph embedding
-        combined = global_graph_embedding + message_rep
-        # predict the food node: output logits for each node
-        logits = self.fc(combined)  # shape: [num_nodes]
+        h = self.conv1(node_features, edge_index, edge_attr)
+        h = F.relu(h)
+        h = self.conv2(h, edge_index, edge_attr)
+        h = F.relu(h)
+
+        if hasattr(graph, "batch"):
+            pooled = global_mean_pool(h, graph.batch)
+        else:
+            pooled = h.mean(dim=0, keepdim=True)
+
+        logits = self.lin(pooled) / self.temp
+        logits = F.log_softmax(logits, dim=1)
         return logits
+
+class GraphReceiver(nn.Module):
+    def __init__(self, feat_size, embedding_size, vocab_size, edge_attr_dim=9):
+        super(GraphReceiver, self).__init__()
+        self.embedding_size = embedding_size
+
+        self.edge_nn1 = nn.Sequential(
+            nn.Linear(edge_attr_dim, 32),
+            nn.ReLU(),
+            nn.Linear(32, feat_size * embedding_size)
+        )
+        self.conv1 = NNConv(feat_size, embedding_size, self.edge_nn1, aggr='mean')
+
+        self.edge_nn2 = nn.Sequential(
+            nn.Linear(edge_attr_dim, 32),
+            nn.ReLU(),
+            nn.Linear(32, embedding_size * embedding_size)
+        )
+        self.conv2 = NNConv(embedding_size, embedding_size, self.edge_nn2, aggr='mean')
+
+        self.signal_embedding = nn.Embedding(vocab_size, embedding_size)
+
+    def forward(self, signal, x, _aux_input=None):
+        graph = _aux_input["graph_data"]
+        node_features = graph.x
+        edge_index = graph.edge_index
+        edge_attr = graph.edge_attr
+
+        h = self.conv1(node_features, edge_index, edge_attr)
+        h = F.relu(h)
+        h = self.conv2(h, edge_index, edge_attr)
+        h = F.relu(h)  # h: (num_nodes, embedding_size)
+
+        signal_emb = self.signal_embedding(signal)  # shape: (batch_size, embedding_size)
+
+        if signal_emb.dim() == 2 and signal_emb.size(0) == 1:
+            signal_emb = signal_emb.squeeze(0)
+
+        scores = torch.matmul(h, signal_emb)  # (num_nodes,)
+        log_probs = F.log_softmax(scores, dim=0)
+        return log_probs
+
+if __name__ == '__main__':
+    env = Environment(num_distractors=2)
+    # env.visualize_environment()
+    pyg_data = get_dataloader(env.graph)
+
+    aux_input = {"graph_data": pyg_data}
+
+    feat_size = 3         # node/location types (one-hot)
+    embedding_size = 16
+    hidden_size = 32
+    vocab_size = 12       # communication vocabulary size
+    edge_attr_dim = 9     # [distance (1) + one-hot direction (8)]
+    
+    sender = GraphSender(feat_size, embedding_size, hidden_size, vocab_size, temp=1.0, edge_attr_dim=edge_attr_dim)
+    receiver = GraphReceiver(feat_size, embedding_size, vocab_size, edge_attr_dim=edge_attr_dim)
+
+    # --- Test Sender ---
+    sender_output = sender(None, _aux_input=aux_input)
+    print("Sender output (logits over vocabulary):")
+    print(sender_output)
+
+    # create a dummy signal for the receiver
+    # by choosing the token with the highest probability from the sender
+    sender_token = sender_output.argmax(dim=1)  # tensor of shape (batch_size,)
+    print("\nSender token (argmax):", sender_token)
+
+    # --- Test Receiver ---
+    receiver_output = receiver(sender_token, None, _aux_input=aux_input)
+    print("\nReceiver output (log_probs over nodes):")
+    print(receiver_output)
