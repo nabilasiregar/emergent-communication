@@ -1,122 +1,78 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import NNConv, global_mean_pool
-from data_loader import get_dataloader
-from environment import Environment
+from torch_geometric.nn import RGCNConv, global_mean_pool
 
-class GraphSender(nn.Module):
-    def __init__(self, feat_size, embedding_size, hidden_size, vocab_size=12, temp=1.0, edge_attr_dim=9):
-        super(GraphSender, self).__init__()
-        self.embedding_size = embedding_size
+class SenderAgent(nn.Module):
+    def __init__(self, feat_size, embedding_size, hidden_size, vocab_size, num_relations=1):
+        super().__init__()
         self.hidden_size = hidden_size
         self.vocab_size = vocab_size
-        self.temp = temp
 
-        self.edge_nn1 = nn.Sequential(
-            nn.Linear(edge_attr_dim, 32),
-            nn.ReLU(),
-            nn.Linear(32, feat_size * embedding_size)
-        )
-        self.conv1 = NNConv(feat_size, embedding_size, self.edge_nn1, aggr='mean')
+        self.rgcn1 = RGCNConv(feat_size, embedding_size, num_relations=num_relations)
+        self.rgcn2 = RGCNConv(embedding_size, hidden_size, num_relations=num_relations)
 
-        self.edge_nn2 = nn.Sequential(
-            nn.Linear(edge_attr_dim, 32),
-            nn.ReLU(),
-            nn.Linear(32, embedding_size * hidden_size)
-        )
-        self.conv2 = NNConv(embedding_size, hidden_size, self.edge_nn2, aggr='mean')
+        self.init_h = nn.Linear(hidden_size, hidden_size)
+        self.init_c = nn.Linear(hidden_size, hidden_size)
 
-        self.lin = nn.Linear(hidden_size, vocab_size)
+        self.output_layer = nn.Linear(hidden_size, vocab_size)
 
-    def forward(self, x, _aux_input=None):
-        graph = _aux_input["graph_data"]
-        node_features = graph.x
-        edge_index = graph.edge_index
-        edge_attr = graph.edge_attr
+    def forward(self, prev_symbol, prev_state=None, _aux_input=None):
+        if _aux_input is None:
+            raise ValueError("No aux input!")
+        if prev_state is None:
+            graph_data = _aux_input["graph_data"]
+            x = graph_data.x
+            edge_index = graph_data.edge_index
+            batch = getattr(graph_data, 'batch', None)
 
-        h = self.conv1(node_features, edge_index, edge_attr)
-        h = F.relu(h)
-        h = self.conv2(h, edge_index, edge_attr)
-        h = F.relu(h)
+            h = self.rgcn1(x, edge_index)
+            h = F.relu(h)
+            h = self.rgcn2(h, edge_index)
+            h = F.relu(h)
 
-        if hasattr(graph, "batch"):
-            pooled = global_mean_pool(h, graph.batch)
-        else:
-            pooled = h.mean(dim=0, keepdim=True)
+            if batch is not None:
+                pooled = global_mean_pool(h, batch)
+            else:
+                pooled = h.mean(dim=0, keepdim=True)
 
-        logits = self.lin(pooled) / self.temp
+            hidden_0 = self.init_h(pooled)
+            cell_0 = self.init_c(pooled)
+            prev_state = (hidden_0, cell_0)
+
+        (hidden, cell) = prev_state
+        # produce discrete token distribution
+        logits = self.output_layer(hidden)
         logits = F.log_softmax(logits, dim=1)
-        return logits
 
-class GraphReceiver(nn.Module):
-    def __init__(self, feat_size, embedding_size, vocab_size, edge_attr_dim=9):
-        super(GraphReceiver, self).__init__()
-        self.embedding_size = embedding_size
+        return logits, (hidden, cell)
 
-        self.edge_nn1 = nn.Sequential(
-            nn.Linear(edge_attr_dim, 32),
-            nn.ReLU(),
-            nn.Linear(32, feat_size * embedding_size)
-        )
-        self.conv1 = NNConv(feat_size, embedding_size, self.edge_nn1, aggr='mean')
 
-        self.edge_nn2 = nn.Sequential(
-            nn.Linear(edge_attr_dim, 32),
-            nn.ReLU(),
-            nn.Linear(32, embedding_size * embedding_size)
-        )
-        self.conv2 = NNConv(embedding_size, embedding_size, self.edge_nn2, aggr='mean')
+class ReceiverAgent(nn.Module):
+    def __init__(self, feat_size, embedding_size, hidden_size, vocab_size, num_relations=1):
+        super().__init__()
+        self.hidden_size = hidden_size
 
-        self.signal_embedding = nn.Embedding(vocab_size, embedding_size)
+        self.rgcn1 = RGCNConv(feat_size, embedding_size, num_relations=num_relations)
+        self.rgcn2 = RGCNConv(embedding_size, embedding_size, num_relations=num_relations)
 
-    def forward(self, signal, x, _aux_input=None):
-        graph = _aux_input["graph_data"]
-        node_features = graph.x
-        edge_index = graph.edge_index
-        edge_attr = graph.edge_attr
+        self.hidden_proj = nn.Linear(hidden_size, embedding_size)
 
-        h = self.conv1(node_features, edge_index, edge_attr)
+    def forward(self, last_hidden, _input=None, _aux_input=None):
+        graph_data = _aux_input["graph_data"]
+        x = graph_data.x
+        edge_index = graph_data.edge_index
+
+        # node embeddings
+        h = self.rgcn1(x, edge_index)
         h = F.relu(h)
-        h = self.conv2(h, edge_index, edge_attr)
-        h = F.relu(h)  # h: (num_nodes, embedding_size)
+        h = self.rgcn2(h, edge_index)
+        h = F.relu(h)  # shape [num_nodes, embedding_size]
 
-        signal_emb = self.signal_embedding(signal)  # shape: (batch_size, embedding_size)
+        message_embed = self.hidden_proj(last_hidden)  # shape [batch_size, embedding_size]
+        message_embed = message_embed.squeeze(0) 
 
-        if signal_emb.dim() == 2 and signal_emb.size(0) == 1:
-            signal_emb = signal_emb.squeeze(0)
-
-        scores = torch.matmul(h, signal_emb)  # (num_nodes,)
+        # dot product each node embedding with the message
+        scores = torch.matmul(h, message_embed.T)
         log_probs = F.log_softmax(scores, dim=0)
         return log_probs
-
-if __name__ == '__main__':
-    env = Environment(num_distractors=2)
-    # env.visualize_environment()
-    pyg_data = get_dataloader(env.graph)
-
-    aux_input = {"graph_data": pyg_data}
-
-    feat_size = 3         # node/location types (one-hot)
-    embedding_size = 16
-    hidden_size = 32
-    vocab_size = 12       # communication vocabulary size
-    edge_attr_dim = 9     # [distance (1) + one-hot direction (8)]
-    
-    sender = GraphSender(feat_size, embedding_size, hidden_size, vocab_size, temp=1.0, edge_attr_dim=edge_attr_dim)
-    receiver = GraphReceiver(feat_size, embedding_size, vocab_size, edge_attr_dim=edge_attr_dim)
-
-    # --- Test Sender ---
-    sender_output = sender(None, _aux_input=aux_input)
-    print("Sender output (logits over vocabulary):")
-    print(sender_output)
-
-    # create a dummy signal for the receiver
-    # by choosing the token with the highest probability from the sender
-    sender_token = sender_output.argmax(dim=1)  # tensor of shape (batch_size,)
-    print("\nSender token (argmax):", sender_token)
-
-    # --- Test Receiver ---
-    receiver_output = receiver(sender_token, None, _aux_input=aux_input)
-    print("\nReceiver output (log_probs over nodes):")
-    print(receiver_output)
