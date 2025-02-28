@@ -1,63 +1,117 @@
+import sys
 import argparse
+import torch
+import torch.nn as nn
 import torch.optim as optim
 import egg.core as core
-from agents import GraphSender, GraphReceiver
-from torch.utils.data import DataLoader
-from data_loader import get_dataloader
-from environment import Environment
-import pdb
+from egg.core import RnnSenderReinforce, RnnReceiverReinforce, SenderReceiverRnnReinforce
+from torch.utils.data import random_split
+from torch_geometric.loader import DataLoader
 
-def parse_arguments():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--embedding_size", type=int, default=16, help="Size of the embedding layer")
-    parser.add_argument("--hidden_size", type=int, default=32, help="Size of the hidden layers")
-    parser.add_argument("--vocab_size", type=int, default=8, help="Size of the vocabulary")
-    parser.add_argument("--game_size", type=int, default=1, help="Size of the game (number of agents)")
-    parser.add_argument("--feat_size", type=int, default=12, help="Size of the feature vectors")
-    parser.add_argument("--num_classes", type=int, default=3, help="Number of classes for classification")
-    parser.add_argument("--temp", type=float, default=1.0, help="Temperature parameter for Gumbel-Softmax")
-    parser.add_argument(
-        "--mode",
-        type=str,
-        choices=['rf', 'gs'],
-        default="rf",
-        help="Training mode: Gumbel-Softmax (gs) or Reinforce (rf)"
+from data_loader import create_dataset
+from agents import SenderAgent, ReceiverAgent
+
+def make_egg_data_iter(loader):
+    """
+    Converts a PyG DataLoader into an infinite generator of EGG samples:
+    (sender_input, receiver_input, _aux_input)
+    """
+    while True:
+        for batch in loader:
+            yield (None, None, {"graph_data": batch})
+
+def select_node_and_reward(receiver_output, graph_data):
+    predicted_node = receiver_output.argmax(dim=0).item()
+    node_type = graph_data.x[predicted_node, :3] 
+    is_food = (node_type[1].item() == 1.0)
+    return 1.0 if is_food else 0.0
+
+def loss_fn(sender_input, message, receiver_input, receiver_output, _aux_input):
+    graph_data = _aux_input["graph_data"]
+    reward = select_node_and_reward(receiver_output, graph_data)
+    logs = {"acc_reward": torch.tensor([reward])}
+    loss = torch.zeros(1, requires_grad=True)
+    return loss, logs
+
+def main(custom_args, egg_params):
+    core.init(params=egg_params)
+    opts = core.get_opts()
+
+    max_len = 3 if custom_args.bee_like else custom_args.max_len
+    n_epochs = custom_args.n_epochs
+
+    # create dataset
+    full_dataset = create_dataset(num_graphs=50, num_distractors=custom_args.game_size, connect_threshold=60.0)
+    train_size = 40
+    val_size = 10
+    train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
+    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
+    train_iter = make_egg_data_iter(train_loader)
+    val_iter = make_egg_data_iter(val_loader)
+
+    # create agents
+    feat_size = 5
+    embedding_size = 16
+    hidden_size = 32
+    vocab_size = custom_args.vocab_size
+
+    sender_core = SenderAgent(feat_size, embedding_size, hidden_size, vocab_size)
+    sender = RnnSenderReinforce(
+        agent=sender_core,
+        vocab_size=vocab_size,
+        embed_dim=hidden_size,
+        hidden_size=hidden_size,
+        max_len=max_len,
+        cell='lstm'
     )
-    parser.add_argument("--n_epochs", type=int, default=3, help="Number of training epochs")
-    parser.add_argument("--batch_size", type=int, default=1, help="Batch size for training")
+
+    receiver_core = ReceiverAgent(feat_size, embedding_size, hidden_size, vocab_size)
+    receiver = RnnReceiverReinforce(
+        agent=receiver_core,
+        vocab_size=vocab_size,
+        embed_dim=hidden_size,
+        hidden_size=hidden_size,
+        cell='lstm'
+    )
+
+    # training
+    game = SenderReceiverRnnReinforce(
+        sender=sender,
+        receiver=receiver,
+        loss=loss_fn,
+        sender_entropy_coeff=1e-2,
+        receiver_entropy_coeff=1e-2
+    )
+    optimizer = optim.Adam(game.parameters(), lr=custom_args.lr)
     
-    args = parser.parse_args()
-    return args
-
-def play(opts):
-    env = Environment(num_distractors=2)
-    graph_data = get_dataloader(env.graph)
-    dataloader = DataLoader(graph_data, batch_size=opts.batch_size, shuffle=True)
-
-    sender = GraphSender(opts.game_size, opts.feat_size, opts.embedding_size, opts.hidden_size, opts.vocab_size, opts.temp)
-    receiver = GraphReceiver(opts.game_size, opts.feat_size, opts.embedding_size, opts.vocab_size, reinforce=(opts.mode == "rf"))
-    
-    def loss(_sender_input, _message, _receiver_input, receiver_output, labels, _aux_input):
-        return torch.nn.functional.nll_loss(receiver_output, labels)
-
-    if opts.mode == "rf":
-        sender = core.ReinforceWrapper(sender)
-        receiver = core.ReinforceWrapper(receiver)
-        game = core.SymbolGameReinforce(sender, receiver, loss)
-    elif opts.mode == "gs":
-        sender = core.GumbelSoftmaxWrapper(sender, temperature=opts.temp)
-        receiver = core.GumbelSoftmaxWrapper(receiver, temperature=opts.temp)
-        game = core.SymbolGameGS(sender, receiver, loss)
-  
     trainer = core.Trainer(
         game=game,
-        optimizer=optim.Adam(list(sender.parameters()) + list(receiver.parameters()), lr=0.001),
-        train_data=dataloader,
-        validation_data=None,
-        callbacks=[core.ConsoleLogger()]
+        optimizer=optimizer,
+        train_data=train_iter,
+        validation_data=val_iter,
     )
-    trainer.train()
+
+    trainer.train(n_epochs=opts.n_epochs)
+    core.close()
 
 if __name__ == "__main__":
-    opts = parse_arguments()
-    play(opts)
+    parser = argparse.ArgumentParser(conflict_handler='resolve')
+
+    parser.add_argument("--experiment", type=str, required=True)
+    parser.add_argument("--model_generation", type=str, required=True)
+    parser.add_argument("--game_size", type=int, required=True,
+                        help="Number of distractors")
+    parser.add_argument("--vocab_size", type=int, required=True)
+    parser.add_argument("--max_len", type=int, required=True,
+                        help="Max message length for human-like mode")
+    parser.add_argument("--n_epochs", type=int, default=30)
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--bee_like", action="store_true",
+                        help="Use bee-like mode (max_len=3 tokens) instead of human-like mode")
+    
+    custom_args, leftover = parser.parse_known_args()
+    print("Custom parsed arguments:", custom_args)
+    print("Leftover EGG parameters:", leftover)
+
+    main(custom_args, leftover)
