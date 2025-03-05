@@ -4,107 +4,97 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 class Environment:
-    def __init__(self, num_distractors=4, connect_threshold=50.0, max_tries=1000, plot=False):
+    def __init__(self, num_nodes=6, edge_connection_prob=0.3, max_tries=100, plot=False):
         """
-        Initializes the environment/network.
-        
-        :param num_distractors: Number of distractor nodes
-        :param connect_threshold: Controls the maximum Euclidean distance between two nodes 
-                                  for them to be connected by an edge in the graph
-        :param max_tries: Max number of attempts to generate a single connected graph
-                          from nest (node 0) to food (node 1), skipping direct edge
+        Initializes the environment.
+
+        :param num_nodes: Total number of nodes in the graph
+        :param edge_connection_prob: Probability for each ordered pair of nodes to have an edge
+        :param max_tries: Maximum attempts to generate a valid graph
         :param plot: If True, visualize the environment after creation
         """
-        self.num_distractors = num_distractors
-        self.connect_threshold = connect_threshold
+        self.num_nodes = num_nodes
+        self.edge_connection_prob = edge_connection_prob
         self.max_tries = max_tries
-        self.nest_position = (0, 0)
-        self.graph = nx.Graph()
+        self.graph = nx.DiGraph()
+        self.nest = None
+        self.food = None
 
         self._setup_environment()
         if plot:
             self.visualize_environment()
 
     def _setup_environment(self):
-        """
-        Generate the graph:
-          1. Create nest (node 0) at (0,0)
-          2. Create food (node 1) at a random position
-          3. Create distractors (2..N)
-          4. Form edges based on distance threshold, but skip nest->food direct edge
-          5. Ensure no isolated node (only 1 cluster in the graph)
-        """
         attempt = 0
+
         while attempt < self.max_tries:
             self.graph.clear()
-
-            # create nest node
-            self.graph.add_node(0,
-                                position=self.nest_position,
-                                type='Nest')
-            # create food node
-            food_position = self._random_position()
-            self.graph.add_node(1,
-                                position=food_position,
-                                type='Food')
-
-            # create distractors
-            for node_index in range(2, self.num_distractors + 2):
+            # create nodes with random positions
+            for node in range(self.num_nodes):
                 pos = self._random_position()
-                self.graph.add_node(node_index,
-                                    position=pos,
-                                    type='Distractor')
+                self.graph.add_node(node, position=pos, type='Distractor')
 
-            # connect nodes (except direct 0->1)
-            self._connect_nodes()
+            # randomly add directed edges
+            nodes = list(self.graph.nodes())
+            for i in nodes:
+                for j in nodes:
+                    if i == j:
+                        continue
+                    if random.random() < self.edge_connection_prob:
+                        self.graph.add_edge(i, j)
 
-            # check if the entire graph is a single connected component
-            if nx.is_connected(self.graph):
+            # randomly choose nest and food nodes from the graph.
+            self.nest, self.food = random.sample(nodes, 2)
+            self.graph.nodes[self.nest]['type'] = 'Nest'
+            self.graph.nodes[self.food]['type'] = 'Food'
+
+            # remove any direct connection between nest and food (vice versa)
+            if self.graph.has_edge(self.nest, self.food):
+                self.graph.remove_edge(self.nest, self.food)
+            if self.graph.has_edge(self.food, self.nest):
+                self.graph.remove_edge(self.food, self.nest)
+
+            # every node must have at least one connection
+            all_have_edge = all(self.graph.degree(n) > 0 for n in nodes)
+            undirected = self.graph.to_undirected()
+            connected = nx.is_connected(undirected)
+            # there must be a directed path from nest to food
+            path_exists = nx.has_path(self.graph, self.nest, self.food)
+
+            if all_have_edge and connected and path_exists:
+                self._assign_edge_attributes()
                 return
 
             attempt += 1
 
         raise RuntimeError(
-            f"Failed to generate a single-cluster graph (no disjoint nodes)"
-            f"within {self.max_tries} attempts"
+            f"Failed to generate a valid graph after {self.max_tries} trials"
         )
 
-    def _connect_nodes(self):
-        """
-        Connect nodes pairwise if their distance is below 'connect_threshold',
-        skipping the direct edge (0->1) between nest and food.
-        """
-        all_nodes = list(self.graph.nodes())
+    def _assign_edge_attributes(self):
+        """Assigns distance and direction to each edge based on node positions"""
         positions = nx.get_node_attributes(self.graph, 'position')
-
-        for i in all_nodes:
-            for j in all_nodes:
-                if i < j:
-                    # skip direct edge (0->1)
-                    if (i == 0 and j == 1) or (i == 1 and j == 0):
-                        continue
-
-                    dist_ij = self.calculate_distance(positions[i], positions[j])
-                    if dist_ij <= self.connect_threshold:
-                        self.graph.add_edge(i, j)
+        for u, v in self.graph.edges():
+            pos_u = positions[u]
+            pos_v = positions[v]
+            distance = self.calculate_distance(pos_u, pos_v)
+            direction = self.calculate_direction(pos_u, pos_v)
+            self.graph[u][v]['distance'] = distance
+            self.graph[u][v]['direction'] = direction
 
     def _random_position(self):
         """Generates a random (x, y) position"""
         return (random.randint(-100, 100), random.randint(-100, 100))
 
     def calculate_distance(self, pos1, pos2):
-        """Calculates Euclidean distance between two points"""
+        """Calculates the Euclidean distance between two points"""
         dx = pos2[0] - pos1[0]
         dy = pos2[1] - pos1[1]
         return math.hypot(dx, dy)
 
     def calculate_direction(self, pos1, pos2):
         """
-        Computes a cardinal/intercardinal direction into 8 quadrants
-        from pos1 to pos2.
-        
-        Use this in the agent if/when you want to find the direction
-        from the nest to another node.
+        Computes the direction from pos1 to pos2 to one of the 8 quadrants
         """
         dx = pos2[0] - pos1[0]
         dy = pos2[1] - pos1[1]
@@ -117,23 +107,35 @@ class Environment:
         return directions[idx]
 
     def visualize_environment(self):
+        """Visualizes the directed graph with node types and edge attributes"""
         pos = nx.get_node_attributes(self.graph, 'position')
         types = nx.get_node_attributes(self.graph, 'type')
         colors = {'Nest': 'gold', 'Food': 'red', 'Distractor': 'skyblue'}
 
-        labels = {node: f"{types[node]}" for node in self.graph.nodes()}
+        node_colors = [colors.get(types[n], 'gray') for n in self.graph.nodes()]
+        labels = {n: f"{types[n]}" for n in self.graph.nodes()}
 
-        nx.draw(
-            self.graph,
-            pos,
-            labels=labels,
-            with_labels=True,
-            node_color=[colors[types[n]] for n in self.graph.nodes()],
-            edge_color='gray',
-            node_size=700,
-            font_size=9
-        )
+        plt.figure(figsize=(8, 6))
+        nx.draw_networkx_nodes(self.graph, pos, node_color=node_colors, node_size=700)
+        nx.draw_networkx_labels(self.graph, pos, labels, font_size=10)
+        nx.draw_networkx_edges(self.graph, pos, arrowstyle='->', arrowsize=15, edge_color='gray')
+
+        edge_labels = {(u, v): f"{self.graph[u][v]['distance']:.1f}m\n{self.graph[u][v]['direction']}"
+                       for u, v in self.graph.edges()}
+        nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=edge_labels, font_size=8)
+
+        plt.axis('off')
         plt.show()
 
 if __name__ == '__main__':
-    env = Environment(num_distractors=4, connect_threshold=60.0, plot=True)
+    env = Environment(num_nodes=6, edge_connection_prob=0.3, plot=True)
+    if nx.has_path(env.graph, env.nest, env.food):
+        path = nx.shortest_path(env.graph, source=env.nest, target=env.food, weight="distance")
+        
+        print(f"Path from Nest ({env.nest}) to Food ({env.food}):")
+        for i in range(len(path) - 1):
+            u, v = path[i], path[i + 1]
+            edge_data = env.graph[u][v]
+            print(f"  {u} -> {v} | Distance: {edge_data['distance']:.2f}m, Direction: {edge_data['direction']}")
+    else:
+        print("No valid path from Nest to Food!")
