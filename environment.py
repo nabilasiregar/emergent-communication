@@ -116,8 +116,8 @@ def visualize_environment(env):
     for (u, v, d) in env.graph.edges(data=True):
         nx.draw_networkx_edges(env.graph, pos, edgelist=[(u, v)], arrowstyle='-|>', arrowsize=15,
                             edge_color='gray', connectionstyle='arc3,rad=0.1')
-        edge_label = { (u, v): f"{d['distance']:.1f}m\n{d['direction']}" }
-        nx.draw_networkx_edge_labels(env.graph, pos, edge_labels=edge_label, font_color='black', label_pos=0.3)
+        edge_label = { (u, v): f"{d['distance']:.1f}m ({d['direction']})" }
+        nx.draw_networkx_edge_labels(env.graph, pos, edge_labels=edge_label, font_color='black', label_pos=0.4, font_size=8, connectionstyle='arc3,rad=0.1')
         
     plt.axis('off')
     plt.show()
