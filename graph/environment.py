@@ -42,7 +42,6 @@ class Environment:
         """
         - node_type: food, nest, distractor
         - position: (x, y) coordinate
-        If removal breaks connectivity, regenerates the random graph and tries again.
         """
         for attempt in range(self.max_tries):
             nodes = list(self.directed_graph.nodes())
