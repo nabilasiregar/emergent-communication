@@ -1,8 +1,8 @@
 import torch
 from torch_geometric.data import Batch
 from torch.utils.data import Dataset, DataLoader, random_split
-from environment import Environment
-from data_builder import DataConverter, get_nest_and_food_indices
+from graph.environment import Environment
+from graph.data_builder import DataConverter, get_nest_and_food_indices
 
 class GraphDataset(Dataset):
     def __init__(self, num_samples: int = 100, num_nodes: int = 6, connection_prob: float = 0.3):
@@ -31,38 +31,35 @@ def collate_fn(batch):
     
     return batched_data, nest_tensor, food_tensor
 
-
-def create_dataset(num_samples=100, num_nodes=6, connection_prob=0.3, train_ratio=0.8, batch_size=16):
-    """
-    Creates and returns training and validation DataLoaders
-    
-    Args:
-        num_samples (int): Total number of graph samples
-        num_nodes (int): Number of nodes per graph
-        connection_prob (float): Probability for edge creation in the graph
-        train_ratio (float): Fraction of samples used for training
-        batch_size (int): Batch size
-    """
+def create_dataset(file_path, num_samples=100, num_nodes=6, connection_prob=0.3, train_ratio=0.8):
     dataset = GraphDataset(num_samples=num_samples, num_nodes=num_nodes, connection_prob=connection_prob)
     train_size = int(train_ratio * len(dataset))
     val_size = len(dataset) - train_size
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
-    
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
-    
-    return train_loader, val_loader
 
+    # train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
+    # val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
+    
+    train_set = [train_dataset[i] for i in range(len(train_dataset))]
+    val_set = [val_dataset[i] for i in range(len(val_dataset))]
+    
+    torch.save({
+        'train_set': train_set,
+        'val_set': val_set
+    }, file_path)
+
+    # return train_loader, val_loader
 
 if __name__ == '__main__':
-    train_loader, val_loader = create_dataset(num_samples=50, num_nodes=6, connection_prob=0.3, batch_size=5)
+    # train_loader, val_loader = create_dataset(num_samples=50, num_nodes=6, connection_prob=0.3, batch_size=5)
     
-    print("TRAINING BATCH:")
-    for batched_data, start_tensor, target_tensor in train_loader:
-        print("Batched Graph:")
-        print("x:", batched_data.x)
-        print("edge_index:", batched_data.edge_index)
-        print("edge_attr:", batched_data.edge_attr)
-        print("Nest ID:", start_tensor)
-        print("Food ID:", target_tensor)
-        break
+    # print("TRAINING BATCH:")
+    # for batched_data, start_tensor, target_tensor in train_loader:
+    #     print("Batched Graph:")
+    #     print("x:", batched_data.x)
+    #     print("edge_index:", batched_data.edge_index)
+    #     print("edge_attr:", batched_data.edge_attr)
+    #     print("Nest ID:", start_tensor)
+    #     print("Food ID:", target_tensor)
+    #     break
+    create_dataset("graph_dataset.pt", num_samples=500, num_nodes=6)

@@ -2,7 +2,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import random
 import math
-from draw import visualize_network
+from graph.draw import visualize_network
 import pdb
 
 class Environment:

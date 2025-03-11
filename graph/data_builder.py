@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch_geometric.data import Data, Batch
 from torch.utils.data import Dataset, DataLoader, random_split
-from environment import Environment
+from graph.environment import Environment
 import pdb
 
 class DataConverter:
