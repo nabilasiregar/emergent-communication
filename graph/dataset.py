@@ -19,17 +19,24 @@ class GraphDataset(Dataset):
     def __getitem__(self, index: int):
         return self.samples[index]
 
-
 def collate_fn(batch):
     data_list = [sample[0] for sample in batch]
-    nest_list = [sample[1] for sample in batch]
-    food_list = [sample[2] for sample in batch]
-    
-    batched_data = Batch.from_data_list(data_list)
-    nest_tensor = torch.tensor(nest_list, dtype=torch.long)
-    food_tensor = torch.tensor(food_list, dtype=torch.long)
-    
-    return batched_data, nest_tensor, food_tensor
+    nest_tensor = torch.tensor([sample[1] for sample in batch])
+    food_tensor = torch.tensor([sample[2] for sample in batch])
+
+    batch_data = Batch.from_data_list(data_list)
+
+    sender_input = torch.zeros(len(batch), dtype=torch.long) 
+    receiver_input = None
+    labels = food_tensor # what the receiver predicts
+    aux_input = {
+        'data': batch_data,
+        'nest_tensor': nest_tensor,
+        'food_tensor': food_tensor
+    }
+
+    return sender_input, labels, receiver_input, aux_input
+
 
 def create_dataset(file_path, num_samples=100, num_nodes=6, connection_prob=0.3, train_ratio=0.8):
     dataset = GraphDataset(num_samples=num_samples, num_nodes=num_nodes, connection_prob=connection_prob)

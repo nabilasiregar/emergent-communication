@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from archs.arch import RGCN
 from vector_quantize_pytorch import VectorQuantize
+import pdb
 
 class BeeSender(nn.Module):
     def __init__(self, num_node_features, embedding_size, hidden_size,
@@ -17,7 +18,11 @@ class BeeSender(nn.Module):
         self.distance_head = nn.Linear(hidden_size, 1)
 
     def forward(self, x, _aux_input):
-        data, nest_tensor, food_tensor = _aux_input
+        x = _aux_input
+        data = x['data']
+        nest_tensor = x['nest_tensor']
+        food_tensor = x['food_tensor']
+
         h = self.rgcn(data)
         nest_embed = h[nest_tensor]
         food_embed = h[food_tensor]
@@ -27,8 +32,8 @@ class BeeSender(nn.Module):
 
         token_a_logit = self.direction_head(hidden)
         token_b_continuous = self.distance_head(hidden)
-
-        return F.log_softmax(token_a_logit, dim=-1), token_b_continuous
+        
+        return token_a_logit, token_b_continuous
 
 
 class HumanSender(nn.Module):
@@ -62,17 +67,22 @@ class Receiver(nn.Module):
         self.rnn = nn.LSTM(embedding_size, hidden_size, batch_first=True)
         self.fc_hidden = nn.Linear(hidden_size, embedding_size)
 
-    def forward(self, message, x, _aux_input):
-        data, nest_tensor, _ = _aux_input
-        h = self.rgcn(data)
-        nest_embed = h[nest_tensor]
+    def forward(self, message, x=None, _aux_input=None):
+        # discrete_sample, continuous_output = message
 
-        # message: [batch, seq_len] discrete tokens
-        msg_embed = self.token_embedding(message.argmax(dim=-1))
+        discrete_sample = message[:, 0].long()
+        continuous_output = message[:, 1]
+
+        x = _aux_input
+        data = x['data']
+        nest_tensor = x['nest_tensor']
+        h = self.rgcn(data)
+
+        discrete_sample = discrete_sample.unsqueeze(1)
+        msg_embed = self.token_embedding(discrete_sample)
+
         rnn_out, _ = self.rnn(msg_embed)
         hidden = self.fc_hidden(rnn_out[:, -1, :])
 
         logits = torch.matmul(h, hidden.unsqueeze(-1)).squeeze(-1)
-        return F.log_softmax(logits, dim=-1)
-
-
+        return logits
