@@ -2,27 +2,28 @@ import sys
 import argparse
 import torch
 import torch.nn as nn
+from torch_geometric.data import Data
 import torch.optim as optim
 import egg.core as core
 from egg.core import RnnSenderReinforce, RnnReceiverReinforce, SenderReceiverRnnReinforce
 from torch.utils.data import random_split
 from torch_geometric.loader import DataLoader
 
-from data_loader import create_dataset
+from data_loader import create_dataset, convert_graph_dict_to_tensors
 from agents import SenderAgent, ReceiverAgent
 
-def make_egg_data_iter(loader):
-    """
-    Converts a PyG DataLoader into an infinite generator of EGG samples:
-    (sender_input, receiver_input, _aux_input)
-    """
+import pdb
+
+def generate_egg_samples(loader):
     while True:
         for batch in loader:
-            yield (None, None, {"graph_data": batch})
+            x, edge_index, edge_attr = convert_graph_dict_to_tensors(batch)
+            graph_data = Data(x=x, edge_index=edge_index, edge_attr=edge_attr)
+            yield (None, None, {"graph_data": graph_data})
 
 def select_node_and_reward(receiver_output, graph_data):
     predicted_node = receiver_output.argmax(dim=0).item()
-    node_type = graph_data.x[predicted_node, :3] 
+    node_type = graph_data.x[predicted_node, :3]
     is_food = (node_type[1].item() == 1.0)
     return 1.0 if is_food else 0.0
 
@@ -40,33 +41,35 @@ def main(custom_args, egg_params):
     max_len = 3 if custom_args.bee_like else custom_args.max_len
     n_epochs = custom_args.n_epochs
 
-    # create dataset
-    full_dataset = create_dataset(num_graphs=50, num_distractors=custom_args.game_size, connect_threshold=60.0)
+    full_dataset = create_dataset(num_graphs=50, num_nodes=6, edge_connection_prob=0.3, max_tries=100, plot=False)
     train_size = 40
     val_size = 10
     train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
     train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
-    train_iter = make_egg_data_iter(train_loader)
-    val_iter = make_egg_data_iter(val_loader)
+    train_iter = generate_egg_samples(train_loader)
+    val_iter = generate_egg_samples(val_loader)
 
-    # create agents
-    feat_size = 5
+    feature_size = 3  
     embedding_size = 16
     hidden_size = 32
     vocab_size = custom_args.vocab_size
 
-    sender_core = SenderAgent(feat_size, embedding_size, hidden_size, vocab_size)
-    sender = RnnSenderReinforce(
-        agent=sender_core,
-        vocab_size=vocab_size,
-        embed_dim=hidden_size,
-        hidden_size=hidden_size,
-        max_len=max_len,
-        cell='lstm'
-    )
+    if custom_args.bee_like:
+        sender_core = SenderAgent(feature_size, embedding_size, hidden_size, vocab_size, bee_like=True)
+        sender = sender_core
+    else:
+        sender_core = SenderAgent(feature_size, embedding_size, hidden_size, vocab_size, bee_like=False)
+        sender = RnnSenderReinforce(
+            agent=sender_core,
+            vocab_size=vocab_size,
+            embed_dim=hidden_size,
+            hidden_size=hidden_size,
+            max_len=max_len,
+            cell='lstm'
+        )
 
-    receiver_core = ReceiverAgent(feat_size, embedding_size, hidden_size, vocab_size)
+    receiver_core = ReceiverAgent(feature_size, embedding_size, hidden_size, vocab_size)
     receiver = RnnReceiverReinforce(
         agent=receiver_core,
         vocab_size=vocab_size,
@@ -75,7 +78,6 @@ def main(custom_args, egg_params):
         cell='lstm'
     )
 
-    # training
     game = SenderReceiverRnnReinforce(
         sender=sender,
         receiver=receiver,
