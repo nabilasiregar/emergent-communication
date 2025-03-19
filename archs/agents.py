@@ -12,10 +12,9 @@ class BeeSender(nn.Module):
         self.fc = nn.Linear(2 * embedding_size, hidden_size)
 
     def forward(self, x, _aux_input):
-        x = _aux_input
-        data = x['data']
-        nest_tensor = x['nest_tensor']
-        food_tensor = x['food_tensor']
+        data = _aux_input['data']
+        nest_tensor = _aux_input['nest_tensor']
+        food_tensor = _aux_input['food_tensor']
 
         h = self.rgcn(data)
         nest_embed = h[nest_tensor]
@@ -23,7 +22,7 @@ class BeeSender(nn.Module):
 
         combined = torch.cat([nest_embed, food_embed], dim=-1)
         hidden = F.relu(self.fc(combined))
-        
+     
         return hidden
 
 
@@ -34,10 +33,9 @@ class HumanSender(nn.Module):
         self.fc = nn.Linear(2 * embedding_size, hidden_size)
 
     def forward(self, x, _aux_input):
-        x = _aux_input
-        data = x['data']
-        nest_tensor = x['nest_tensor']
-        food_tensor = x['food_tensor']
+        data = _aux_input['data']
+        nest_tensor = _aux_input['nest_tensor']
+        food_tensor = _aux_input['food_tensor']
 
         h = self.rgcn(data)
         nest_embed = h[nest_tensor]
@@ -55,13 +53,14 @@ class Receiver(nn.Module):
         super().__init__()
         self.communication = communication
         self.rgcn = RGCN(num_node_features, embedding_size, num_relations=num_relations)
-        # self.fc_msg = nn.Linear(embedding_size, embedding_size)
+        self.fc_hidden = nn.Linear(hidden_size, embedding_size)
 
     def forward(self, message, x, _aux_input):
         data = _aux_input['data']
         node_embeddings = self.rgcn(data)
-        # message_representation = self.fc_msg(message)
-        logits = torch.matmul(node_embeddings, message.unsqueeze(-1)).squeeze(-1)
+    
+        message_representation =  self.fc_hidden(message)
+        logits = torch.matmul(node_embeddings, message_representation.unsqueeze(-1)).squeeze(-1)
         distribution = Categorical(logits=logits)
         sample = distribution.sample()
         log_prob = distribution.log_prob(sample)

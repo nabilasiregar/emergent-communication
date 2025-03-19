@@ -3,7 +3,7 @@ from torch_geometric.data import Batch
 from torch.utils.data import Dataset, DataLoader, random_split
 from graph.environment import Environment
 from graph.data_builder import DataConverter, get_nest_and_food_indices
-
+import pdb
 class GraphDataset(Dataset):
     def __init__(self, num_samples: int = 100, num_nodes: int = 6, connection_prob: float = 0.3):
         self.samples = []
@@ -21,12 +21,12 @@ class GraphDataset(Dataset):
 
 def collate_fn(batch):
     data_list = [sample[0] for sample in batch]
-    nest_tensor = torch.tensor([sample[1] for sample in batch])
-    food_tensor = torch.tensor([sample[2] for sample in batch])
-
     batch_data = Batch.from_data_list(data_list)
 
-    sender_input = torch.zeros(len(batch), dtype=torch.long) 
+    nest_tensor = torch.tensor([batch_data.ptr[i] + sample[1] for i, sample in enumerate(batch)])
+    food_tensor = torch.tensor([batch_data.ptr[i] + sample[2] for i, sample in enumerate(batch)])
+
+    sender_input = torch.zeros(len(batch), dtype=torch.long)
     receiver_input = None
     labels = food_tensor # what the receiver predicts
     aux_input = {
@@ -34,7 +34,6 @@ def collate_fn(batch):
         'nest_tensor': nest_tensor,
         'food_tensor': food_tensor
     }
-
     return sender_input, labels, receiver_input, aux_input
 
 
