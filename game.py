@@ -4,10 +4,8 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 import egg.core as core
-from archs.agents import BeeSender, Receiver
+from archs.agents import BeeSender, HumanSender, Receiver
 from graph.dataset import collate_fn
-from wrappers import CustomSenderWrapper, CustomReceiverWrapper
-import pdb
 
 
 def parse_arguments():
@@ -17,10 +15,11 @@ def parse_arguments():
     parser.add_argument("--hidden_size", type=int, default=128)
     parser.add_argument("--direction_vocab_size", type=int, default=8)
     parser.add_argument("--num_node_features", type=int, default=3)
-    parser.add_argument("--mode", choices=["rf", "gs"], default="rf")
     # parser.add_argument("--n_epochs", type=int, default=20)
     # parser.add_argument("--batch_size", type=int, default=32)
-
+    # parser.add_argument("--max_len", type=int, default=2)
+    parser.add_argument("--communication", choices=["bee", "human"], default="bee")
+    parser.add_argument("--mode", choices=["rf", "gs"], default="rf")
     return core.init(parser)
 
 
@@ -42,7 +41,6 @@ def get_game(opts):
         num_node_features=opts.num_node_features,
         embedding_size=opts.embedding_size,
         hidden_size=opts.hidden_size,
-        direction_vocab_size=opts.direction_vocab_size,
         num_relations=2
     )
 
@@ -51,13 +49,26 @@ def get_game(opts):
         embedding_size=opts.embedding_size,
         hidden_size=opts.hidden_size,
         vocab_size=opts.direction_vocab_size,
-        num_relations=2
+        num_relations=2,
+        communication=opts.communication
     )
 
-    sender = CustomSenderWrapper(sender)
-    receiver = CustomReceiverWrapper(receiver)
+    sender = core.RnnSenderReinforce(
+        sender,
+        vocab_size=opts.direction_vocab_size,
+        embed_dim=opts.embedding_size,
+        hidden_size=opts.hidden_size,
+        max_len=opts.max_len,
+        cell='lstm'
+    )
+    receiver = core.RnnReceiverReinforce(
+        receiver,
+        vocab_size=opts.direction_vocab_size,
+        embed_dim=opts.embedding_size,
+        hidden_size=opts.hidden_size
+    )
 
-    game = core.SymbolGameReinforce(sender, receiver, custom_loss, sender_entropy_coeff=0.01, receiver_entropy_coeff=0.01)
+    game = core.SenderReceiverRnnReinforce(sender, receiver, custom_loss, sender_entropy_coeff=0.01, receiver_entropy_coeff=0.01)
     return game
 
 
