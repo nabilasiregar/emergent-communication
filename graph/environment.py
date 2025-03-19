@@ -47,6 +47,7 @@ class Environment:
             nodes = list(self.directed_graph.nodes())
 
             nest = random.choice(nodes)
+            # switch to check constraint first, and then randomly assign food node
             food = random.choice([n for n in nodes if n != nest])
             
             # pick nest and food nodes randomly, the remaining nodes are distractors
@@ -131,7 +132,7 @@ class Environment:
         return directions[idx]
 
 if __name__ == '__main__':
-    env = Environment(num_nodes=4, connection_prob=0.5)
+    env = Environment(num_nodes=8, connection_prob=0.5)
 
     nodes = list(env.directed_graph.nodes(data=True))
     node_types = {node: data['node_type'] for node, data in nodes}
