@@ -1,5 +1,6 @@
 import torch
 from torch_geometric.data import Batch
+import pdb
 
 def collate_fn(batch):
     data_list = [sample[0] for sample in batch]
@@ -16,4 +17,5 @@ def collate_fn(batch):
         'nest_tensor': nest_tensor,
         'food_tensor': food_tensor
     }
+
     return sender_input, labels, receiver_input, aux_input

@@ -23,3 +23,12 @@ Example:
 ```
 python -m graph.dataset --num_samples 500 --num_nodes 5 --train_ratio 0.8 --train_output data/train_data.pt --test_output data/test_data.pt
 ```
+
+## Vocab size
+### Bee-like
+vocab_size = 1 + 8 + 10  # 1 for EOS, 8 directions, 10 distance bins
+max_len = 2 # distance + direction
+### Human-like
+vocab_size = 50  # 8 directions, 10 distance words, 5 verbs, etc.
+max_len = 10
+
