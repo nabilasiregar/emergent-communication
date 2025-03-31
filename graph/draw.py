@@ -30,8 +30,7 @@ def visualize_network(env):
             edge_labels=edge_label,
             font_color='black',
             label_pos=0.4,
-            font_size=8,
-            connectionstyle='arc3,rad=0.1'
+            font_size=8
         )
         
     plt.axis('off')
