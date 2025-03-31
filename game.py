@@ -95,8 +95,17 @@ def get_params(params):
     return args
 
 def loss(_sender_input, _message, _receiver_input, receiver_output, labels, _aux_input):
-    accuracy = (receiver_output == labels).float()
-    loss = 1.0 - accuracy
+    # sample, log_probs, entropy = receiver_output
+    # accuracy = (sample == labels).float()
+    # reward = accuracy.detach()  # reward = 1 if correct, 0 otherwise
+    # loss = -log_probs * reward
+    predictions = receiver_output 
+    accuracy = (predictions == labels).float()
+    loss = F.cross_entropy(
+        input=torch.stack([receiver_output.float(), labels.float()], dim=1), 
+        target=torch.ones_like(labels),
+        reduction="none"
+    )
 
     return loss, {"acc": accuracy}
 

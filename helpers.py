@@ -11,11 +11,13 @@ def collate_fn(batch):
 
     sender_input = torch.zeros(len(batch), dtype=torch.long)
     receiver_input = None
-    labels = food_tensor # what the receiver predicts
+    # labels represent the relative node index within each individual graph
+    # whereas food tensor represent the absolute index within the entire batch of concatenated graphs
+    labels = torch.tensor([sample[2] for sample in batch]) 
     aux_input = {
         'data': batch_data,
         'nest_tensor': nest_tensor,
         'food_tensor': food_tensor
     }
-
+  
     return sender_input, labels, receiver_input, aux_input

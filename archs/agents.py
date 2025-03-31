@@ -37,7 +37,7 @@ class HumanSender(nn.Module):
         self.max_len = max_len
         self.fc_out = nn.Linear(hidden_size, vocab_size)
 
-    def forward(self, sender_input, aux_input):
+    def forward(self, x, aux_input):
         data, nest_tensor, food_tensor = aux_input['data'], aux_input['nest_tensor'], aux_input['food_tensor']
         h, _ = self.rgcn(data)
 
@@ -47,10 +47,7 @@ class HumanSender(nn.Module):
         combined = torch.cat([nest_embed, food_embed], dim=-1)
         hidden = F.relu(self.fc_hidden(combined))
 
-        hidden_seq = hidden.unsqueeze(1).repeat(1, self.max_len, 1)
-        logits = self.fc_out(hidden_seq)
-
-        return logits
+        return hidden
 
 class Receiver(nn.Module):
     def __init__(self, num_node_features, embedding_size, hidden_size, vocab_size, num_relations):
@@ -61,6 +58,7 @@ class Receiver(nn.Module):
         self.fc_output = nn.Linear(hidden_size, embedding_size)
 
     def forward(self, message, receiver_input, aux_input):
+        # for each graph, extract node embeddings and compute logits individually
         data = aux_input['data']
         h, _ = self.rgcn(data)
 
@@ -71,15 +69,22 @@ class Receiver(nn.Module):
         hidden = hidden.squeeze(0)
 
         hidden_proj = self.fc_output(hidden)
-        logits = (h * hidden_proj[data.batch]).sum(dim=1)
 
-        batch_indices = data.batch
-        num_graphs = batch_indices.max().item() + 1
-        logits_per_graph = torch.full((num_graphs, h.size(0)), float('-inf'), device=h.device)
-        logits_per_graph[batch_indices, torch.arange(h.size(0))] = logits
+        # compute logits for each node per graph
+        num_graphs = data.batch.max().item() + 1
+        logits = []
+        for i in range(num_graphs):
+            nodes_in_graph = (data.batch == i).nonzero(as_tuple=True)[0]
+            node_embeddings = h[nodes_in_graph]
+            
+            graph_logits = node_embeddings @ hidden_proj[i]
+            logits.append(graph_logits)
 
-        dist = Categorical(logits=logits_per_graph)
-        sample = dist.sample() 
+        # pad logits to handle variable number of nodes per graph (future use)
+        logits_padded = nn.utils.rnn.pad_sequence(logits, batch_first=True, padding_value=float('-inf'))
+
+        dist = Categorical(logits=logits_padded)
+        sample = dist.sample()
         log_probs = dist.log_prob(sample)
         entropy = dist.entropy()
 
