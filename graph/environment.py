@@ -81,7 +81,6 @@ class Environment:
                 self.directed_graph.nodes[node]['position'] = (x, y)
             
             if nx.is_connected(self.directed_graph.to_undirected()):
-                print(f"Node attributes assigned successfully on attempt {attempt+1}.")
                 return
             else:
                 print(f"Attempt {attempt+1}: Graph is disconnected after assignment. Regenerating random graph.")
