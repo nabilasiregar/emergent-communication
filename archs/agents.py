@@ -63,7 +63,6 @@ class HumanSender(nn.Module):
         self.rgcn = RGCN(num_node_features, embedding_size, num_relations)
         self.fc_hidden = nn.Linear(2 * embedding_size, hidden_size)
         self.max_len = max_len
-        self.fc_out = nn.Linear(hidden_size, vocab_size)
 
     def forward(self, x, aux_input):
         data, nest_tensor, food_tensor = aux_input['data'], aux_input['nest_tensor'], aux_input['food_tensor']
@@ -77,7 +76,7 @@ class HumanSender(nn.Module):
 
         return hidden
 
-class Receiver(nn.Module):
+class HumanReceiver(nn.Module):
     def __init__(self, num_node_features, embedding_size, hidden_size, vocab_size, num_relations):
         super().__init__()
         self.rgcn = RGCN(num_node_features, embedding_size, num_relations)
@@ -85,7 +84,7 @@ class Receiver(nn.Module):
         self.rnn = nn.GRU(embedding_size, hidden_size, batch_first=True)
         self.fc_output = nn.Linear(hidden_size, embedding_size)
 
-    def forward(self, message, receiver_input, aux_input):
+    def forward(self, message, input, aux_input):
         data = aux_input['data']
         h, _ = self.rgcn(data)
         
@@ -107,14 +106,16 @@ class Receiver(nn.Module):
             logits.append(graph_logits)
 
         # pad logits to handle variable number of nodes per graph (future use)
-        logits_padded = nn.utils.rnn.pad_sequence(logits, batch_first=True, padding_value=float('-inf'))
+        logits = nn.utils.rnn.pad_sequence(logits, batch_first=True, padding_value=float('-inf'))
 
-        dist = Categorical(logits=logits_padded)
-        sample = dist.sample()
-        log_probs = dist.log_prob(sample)
-        entropy = dist.entropy()
+        categorical_distribution = Categorical(logits=logits)
 
-        return sample, log_probs, entropy
+        # sample one node index per graph
+        sample = categorical_distribution.sample()
+        log_prob = categorical_distribution.log_prob(sample)
+        entropy = categorical_distribution.entropy()
+
+        return sample, log_prob, entropy
 
 class BeeReceiver(nn.Module):
     def __init__(self, num_node_features, embedding_size, hidden_size, vocab_size, num_relations):
@@ -144,6 +145,7 @@ class BeeReceiver(nn.Module):
             score_i = nodes_i @ message_repr[i].unsqueeze(1)
             scores.append(score_i.squeeze(1))
         
+        # in case each graph has different number of nodes
         logits = pad_sequence(scores, batch_first=True, padding_value=float('-inf'))
 
         return logits

@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import egg.core as core
-from archs.agents import BeeSender, HumanSender, Receiver, BeeReceiver
+from archs.agents import BeeSender, HumanSender, HumanReceiver, BeeReceiver
 from helpers import collate_fn
 from analysis.callbacks import DataLogger
 
@@ -12,10 +12,7 @@ import pdb
 def get_params(params):
     parser = argparse.ArgumentParser()
     parser.add_argument("--communication_type", choices=["bee", "human"], default="bee")
-    # parser.add_argument("--vocab_size", type=int, default=20,
-    #                     help="Number of discrete symbols for the communication channel")
-    # parser.add_argument("--max_len", type=int, default=2,
-    #                     help="Max length of the message")
+
     # arguments concerning the input data and how they are processed
     parser.add_argument(
         "--train_data", type=str, default="data/train_data.pt", help="Path to the train data"
@@ -97,7 +94,11 @@ def get_params(params):
 
 def loss(_sender_input, _message, _receiver_input, receiver_output, labels, _aux_input):
     acc = (receiver_output == labels).float()
-    return -acc, {"acc": acc}
+    loss = -acc
+    avg_acc = acc.mean()       
+    avg_acc = avg_acc.unsqueeze(0)
+
+    return loss, {"acc": avg_acc}
 
 def get_game(opts):
     if opts.communication_type == "bee":
@@ -129,7 +130,7 @@ def get_game(opts):
         vocab_size = opts.vocab_size
         max_len = opts.max_len
 
-        receiver = Receiver(
+        receiver = HumanReceiver(
         num_node_features=opts.num_node_features,
         embedding_size=opts.receiver_embedding,
         hidden_size=opts.receiver_hidden,
