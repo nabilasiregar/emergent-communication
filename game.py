@@ -211,7 +211,8 @@ def perform_training(opts, train_loader, val_loader, game, callbacks):
             callbacks=callbacks
             + [
                 core.ConsoleLogger(print_train_loss=True, as_json=True),
-                core.PrintValidationEvents(n_epochs=opts.n_epochs)
+                core.PrintValidationEvents(n_epochs=opts.n_epochs),
+                DataLogger(save_path="logs/experiment_bee_totalnodes:50.json")
             ],
         )
     else:
