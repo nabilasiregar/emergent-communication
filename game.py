@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import egg.core as core
-from archs.agents import BeeSender, HumanSender, Receiver
+from archs.agents import BeeSender, HumanSender, Receiver, BeeReceiver
 from helpers import collate_fn
 import pdb
 
@@ -14,7 +14,6 @@ def get_params(params):
     #                     help="Number of discrete symbols for the communication channel")
     # parser.add_argument("--max_len", type=int, default=2,
     #                     help="Max length of the message")
-    parser.add_argument("--num_distance_bins", type=int, default=10)
     # arguments concerning the input data and how they are processed
     parser.add_argument(
         "--train_data", type=str, default="data/train_data.pt", help="Path to the train data"
@@ -95,19 +94,8 @@ def get_params(params):
     return args
 
 def loss(_sender_input, _message, _receiver_input, receiver_output, labels, _aux_input):
-    # sample, log_probs, entropy = receiver_output
-    # accuracy = (sample == labels).float()
-    # reward = accuracy.detach()  # reward = 1 if correct, 0 otherwise
-    # loss = -log_probs * reward
-    predictions = receiver_output 
-    accuracy = (predictions == labels).float()
-    loss = F.cross_entropy(
-        input=torch.stack([receiver_output.float(), labels.float()], dim=1), 
-        target=torch.ones_like(labels),
-        reduction="none"
-    )
-
-    return loss, {"acc": accuracy}
+    acc = (receiver_output == labels).float()
+    return -acc, {"acc": acc}
 
 def get_game(opts):
     if opts.communication_type == "bee":
@@ -115,11 +103,18 @@ def get_game(opts):
             num_node_features=opts.num_node_features,
             embedding_size=opts.sender_embedding,
             hidden_size=opts.sender_hidden,
-            num_relations=opts.num_relations,
-            num_distance_bins=opts.num_distance_bins,
+            num_relations=opts.num_relations
         )
-        vocab_size = opts.num_relations + opts.num_distance_bins
+        vocab_size = opts.num_relations + 1
         max_len = 2
+
+        receiver = BeeReceiver(
+            num_node_features=opts.num_node_features,
+            embedding_size=opts.receiver_embedding,
+            hidden_size=opts.receiver_hidden,
+            vocab_size=vocab_size,
+            num_relations=opts.num_relations
+        )
     else:
         sender = HumanSender(
             num_node_features=opts.num_node_features,
@@ -132,7 +127,7 @@ def get_game(opts):
         vocab_size = opts.vocab_size
         max_len = opts.max_len
 
-    receiver = Receiver(
+        receiver = Receiver(
         num_node_features=opts.num_node_features,
         embedding_size=opts.receiver_embedding,
         hidden_size=opts.receiver_hidden,
@@ -164,29 +159,40 @@ def get_game(opts):
         )
         callbacks = [core.TemperatureUpdater(agent=sender, decay=0.9, minimum=0.1)]
     elif opts.mode.lower() == "rf":
-        sender = core.RnnSenderReinforce(
-            sender,
-            vocab_size,
-            opts.sender_embedding,
-            opts.sender_hidden,
-            max_len,
-            cell=opts.sender_cell
-        )
-        receiver = core.RnnReceiverReinforce(
-            receiver,
-            vocab_size,
-            embed_dim=opts.receiver_embedding,
-            hidden_size=opts.receiver_hidden,
-            cell=opts.receiver_cell
-        )
-        game = core.SenderReceiverRnnReinforce(
-            sender,
-            receiver,
-            loss,
-            sender_entropy_coeff=opts.sender_entropy_coeff,
-            receiver_entropy_coeff=0.01
-        )
-        callbacks = []
+        if opts.communication_type == "bee":
+            receiver = core.ReinforceWrapper(receiver)
+            game = core.SymbolGameReinforce(
+                sender,
+                receiver,
+                loss,
+                sender_entropy_coeff=opts.sender_entropy_coeff,
+                receiver_entropy_coeff=0.01
+            )
+            callbacks = []
+        else:
+            sender = core.RnnSenderReinforce(
+                sender,
+                vocab_size,
+                opts.sender_embedding,
+                opts.sender_hidden,
+                max_len,
+                cell=opts.sender_cell
+            )
+            receiver = core.RnnReceiverReinforce(
+                receiver,
+                vocab_size,
+                embed_dim=opts.receiver_embedding,
+                hidden_size=opts.receiver_hidden,
+                cell=opts.receiver_cell
+            )
+            game = core.SenderReceiverRnnReinforce(
+                sender,
+                receiver,
+                loss,
+                sender_entropy_coeff=opts.sender_entropy_coeff,
+                receiver_entropy_coeff=0.01
+            )
+            callbacks = []
     return game, callbacks
 
 
