@@ -5,6 +5,8 @@ from torch.utils.data import DataLoader
 import egg.core as core
 from archs.agents import BeeSender, HumanSender, Receiver, BeeReceiver
 from helpers import collate_fn
+from analysis.callbacks import DataLogger
+
 import pdb
 
 def get_params(params):
@@ -208,7 +210,7 @@ def perform_training(opts, train_loader, val_loader, game, callbacks):
             callbacks=callbacks
             + [
                 core.ConsoleLogger(print_train_loss=True, as_json=True),
-                core.PrintValidationEvents(n_epochs=opts.n_epochs),
+                core.PrintValidationEvents(n_epochs=opts.n_epochs)
             ],
         )
     else:

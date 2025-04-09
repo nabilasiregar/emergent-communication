@@ -32,3 +32,11 @@ max_len = 2 # distance + direction
 vocab_size = 50  # 8 directions, 10 distance words, 5 verbs, etc.
 max_len = 10
 
+## Experiment
+### Logging data
+Add
+```
+DataLogger(save_path="logs/experiment.json")
+```
+in callbacks
+
