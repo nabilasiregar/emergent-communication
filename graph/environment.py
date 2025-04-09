@@ -7,6 +7,8 @@ import pdb
 
 class Environment:
     def __init__(self, num_nodes=6, connection_prob=0.3, max_tries=100):
+        if num_nodes < 2:
+            raise ValueError("The number of nodes must be at least 2")
         self.num_nodes = num_nodes
         self.connection_prob = connection_prob
         self.max_tries = max_tries
@@ -47,10 +49,23 @@ class Environment:
             nodes = list(self.directed_graph.nodes())
 
             nest = random.choice(nodes)
-            # switch to check constraint first, and then randomly assign food node
-            food = random.choice([n for n in nodes if n != nest])
+            if self.num_nodes > 2:
+                # exclude any node that is directly connected to or from the nest node
+                food_candidates = [
+                    n for n in nodes 
+                    if n != nest and not (self.directed_graph.has_edge(nest, n) or self.directed_graph.has_edge(n, nest))
+                ]
+            else:
+                # for a 2-node graph, the only candidate is the node that is not the nest
+                food_candidates = [n for n in nodes if n != nest]
             
-            # pick nest and food nodes randomly, the remaining nodes are distractors
+            if not food_candidates:
+                print(f"Attempt {attempt+1} of regenerating random graph")
+                self._create_random_graph()
+                continue
+
+            food = random.choice(food_candidates)
+            
             for node in nodes:
                 if node == nest:
                     self.directed_graph.nodes[node]['node_type'] = 'nest'
@@ -59,39 +74,18 @@ class Environment:
                 else:
                     self.directed_graph.nodes[node]['node_type'] = 'distractor'
             
-            # assign random positions within a 100x100 area (to calculate direction and distance)
+            # assign random positions to calculate direction and distance
             for node in nodes:
                 x = random.uniform(0, 100)
                 y = random.uniform(0, 100)
                 self.directed_graph.nodes[node]['position'] = (x, y)
             
-            # if nest and food are directly connected, remove that connection
-            removed_edges = []
-            if self.directed_graph.has_edge(nest, food):
-                self.directed_graph.remove_edge(nest, food)
-                removed_edges.append((nest, food))
-            if self.directed_graph.has_edge(food, nest):
-                self.directed_graph.remove_edge(food, nest)
-                removed_edges.append((food, nest))
-            
-            # if connection is removed, check connectivity
-            if removed_edges:
-                if nx.is_connected(self.directed_graph.to_undirected()):
-                    print(f"Node attributes assigned (attempt {attempt+1}). "
-                          f"Removed direct edge(s) between nest {nest} and food {food}.")
-                    return
-                else:
-                    # regenerate a new random graph
-                    for u, v in removed_edges:
-                        self.directed_graph.add_edge(u, v)
-                    print(f"Removing direct edge between nest {nest} and food {food} broke connectivity"
-                          f"(attempt {attempt+1}). Regenerating a new random graph.")
-                    self._create_random_graph()
-                    continue
-            else:
-                print(f"Node attributes assigned (attempt {attempt+1})"
-                      f"No direct edge between nest {nest} and food {food}")
+            if nx.is_connected(self.directed_graph.to_undirected()):
+                print(f"Node attributes assigned successfully on attempt {attempt+1}.")
                 return
+            else:
+                print(f"Attempt {attempt+1}: Graph is disconnected after assignment. Regenerating random graph.")
+                self._create_random_graph()
         
         raise RuntimeError("Failed to assign node attributes after maximum attempts")
 
@@ -132,7 +126,7 @@ class Environment:
         return directions[idx]
 
 if __name__ == '__main__':
-    env = Environment(num_nodes=8, connection_prob=0.5)
+    env = Environment(num_nodes=2, connection_prob=0.5)
 
     nodes = list(env.directed_graph.nodes(data=True))
     node_types = {node: data['node_type'] for node, data in nodes}
