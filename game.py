@@ -202,6 +202,12 @@ def get_game(opts):
 def perform_training(opts, train_loader, val_loader, game, callbacks):
     optimizer = core.build_optimizer(game.parameters())
 
+    saver = core.InteractionSaver(
+        train_epochs=[],
+        test_epochs=[opts.n_epochs],
+        checkpoint_dir="logs/msgs"
+    )
+
     if opts.print_validation_events == True:
         trainer = core.Trainer(
             game=game,
@@ -212,7 +218,8 @@ def perform_training(opts, train_loader, val_loader, game, callbacks):
             + [
                 core.ConsoleLogger(print_train_loss=True, as_json=True),
                 core.PrintValidationEvents(n_epochs=opts.n_epochs),
-                DataLogger(save_path="logs/experiment_bee_totalnodes:50.json")
+                DataLogger(save_path="logs/run1_human_data:20nodes.json"),
+                saver
             ],
         )
     else:
@@ -222,7 +229,9 @@ def perform_training(opts, train_loader, val_loader, game, callbacks):
             train_data=train_loader,
             validation_data=val_loader,
             callbacks=callbacks
-            + [core.ConsoleLogger(print_train_loss=True, as_json=True)],
+            + [core.ConsoleLogger(print_train_loss=True, as_json=True),
+               saver
+               ]
         )
 
     trainer.train(n_epochs=opts.n_epochs)
