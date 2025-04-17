@@ -6,6 +6,10 @@ from torch.distributions import Categorical, Normal
 from torch.nn.utils.rnn import pad_sequence
 import pdb
 
+def strip_node_types(x, keep_dims):
+    if not keep_dims:                      
+        return torch.zeros(x.size(0), 1, device=x.device)
+    return x[:, keep_dims] 
 class BeeSender(nn.Module):
     def __init__(self, num_node_features, embedding_size, hidden_size, num_relations):
         super(BeeSender, self).__init__()
@@ -77,8 +81,9 @@ class HumanSender(nn.Module):
         return hidden
 
 class HumanReceiver(nn.Module):
-    def __init__(self, num_node_features, embedding_size, hidden_size, vocab_size, num_relations):
+    def __init__(self, num_node_features, embedding_size, hidden_size, vocab_size, num_relations, keep_dims):
         super().__init__()
+        self.keep_dims = keep_dims
         self.rgcn = RGCN(num_node_features, embedding_size, num_relations)
         self.embed = nn.Embedding(vocab_size, embedding_size)
         self.rnn = nn.GRU(embedding_size, hidden_size, batch_first=True)
@@ -86,7 +91,8 @@ class HumanReceiver(nn.Module):
 
     def forward(self, message, input, aux_input):
         data = aux_input['data']
-        h, _ = self.rgcn(data)
+        x_stripped = strip_node_types(data.x, self.keep_dims)
+        h, _ = self.rgcn(data, x_stripped)
         
         message = message.long()
         message_emb = self.embed(message)
@@ -118,8 +124,9 @@ class HumanReceiver(nn.Module):
         return sample, log_prob, entropy
 
 class BeeReceiver(nn.Module):
-    def __init__(self, num_node_features, embedding_size, hidden_size, vocab_size, num_relations):
+    def __init__(self, num_node_features, embedding_size, hidden_size, vocab_size, num_relations, keep_dims):
         super(BeeReceiver, self).__init__()
+        self.keep_dims = keep_dims
         self.rgcn = RGCN(num_node_features, embedding_size, num_relations)
         self.discrete_embed = nn.Embedding(vocab_size, embedding_size)
         self.continuous_fc = nn.Linear(1, embedding_size)
@@ -127,7 +134,8 @@ class BeeReceiver(nn.Module):
         
     def forward(self, message, x, _aux_input):
         data = _aux_input['data']
-        node_emb, _ = self.rgcn(data)
+        x_stripped = strip_node_types(data.x, self.keep_dims)
+        node_emb, _ = self.rgcn(data, x_stripped)
         
         discrete_token = message[:, 0].long() 
         discrete_emb = self.discrete_embed(discrete_token)

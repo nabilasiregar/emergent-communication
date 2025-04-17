@@ -101,6 +101,7 @@ def loss(_sender_input, _message, _receiver_input, receiver_output, labels, _aux
     return loss, {"acc": avg_acc}
 
 def get_game(opts):
+    keep_dims = []
     if opts.communication_type == "bee":
         sender = BeeSender(
             num_node_features=opts.num_node_features,
@@ -116,7 +117,8 @@ def get_game(opts):
             embedding_size=opts.receiver_embedding,
             hidden_size=opts.receiver_hidden,
             vocab_size=vocab_size,
-            num_relations=opts.num_relations
+            num_relations=opts.num_relations,
+            keep_dims=keep_dims
         )
     else:
         sender = HumanSender(
@@ -135,7 +137,8 @@ def get_game(opts):
         embedding_size=opts.receiver_embedding,
         hidden_size=opts.receiver_hidden,
         vocab_size=vocab_size,
-        num_relations=opts.num_relations
+        num_relations=opts.num_relations,
+        keep_dims=keep_dims
     )
 
     if opts.mode.lower() == "gs":
@@ -218,7 +221,7 @@ def perform_training(opts, train_loader, val_loader, game, callbacks):
             + [
                 core.ConsoleLogger(print_train_loss=True, as_json=True),
                 core.PrintValidationEvents(n_epochs=opts.n_epochs),
-                DataLogger(save_path="logs/run1_human_data:20nodes.json"),
+                DataLogger(save_path="logs/masked_bee_data:20nodes.json"),
                 saver
             ],
         )

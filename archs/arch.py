@@ -13,7 +13,8 @@ class RGCN(nn.Module):
             for _ in range(num_layers)
         ])
 
-    def forward(self, data):
+    def forward(self, data, x_override=None):
+        x = x_override if x_override is not None else data.x
         x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
         edge_type = edge_attr[:, 1].long()
         edge_distance = edge_attr[:, 0].float()
