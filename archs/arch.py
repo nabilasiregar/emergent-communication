@@ -27,9 +27,9 @@ class GNN(nn.Module):
 
     def forward(self, data, x_override=None):
         x = x_override if x_override is not None else data.x
-        x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
-        # if x_override is not None:
-        #     assert torch.equal(x, data.x) is False 
+        edge_index, edge_attr = data.edge_index, data.edge_attr
+        if x_override is not None:
+            assert torch.equal(x, data.x) is False 
         edge_type = edge_attr[:, 1].long()
         edge_distance = edge_attr[:, 0].unsqueeze(-1)
         dir_onehot  = F.one_hot(edge_type, self.num_relations).float()
@@ -39,6 +39,6 @@ class GNN(nn.Module):
         for rgcn, nnconv in zip(self.rgcn_convs, self.nnconv_layers):
             h_disc = F.relu(rgcn(h, edge_index, edge_type))
             h_cont = F.relu(nnconv(h, edge_index, edge_attr_c))
-            h      = h + h_disc
+            h      = h + h_disc + h_cont
         
         return h

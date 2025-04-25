@@ -102,7 +102,7 @@ def loss(_sender_input, _message, _receiver_input, receiver_output, labels, _aux
     return loss, {"acc": avg_acc}
 
 def get_game(opts):
-    keep_dims = [0]
+    keep_dims = []
     if opts.communication_type == "bee":
         sender = BeeSender(
             num_node_features=opts.num_node_features,
@@ -209,7 +209,7 @@ def perform_training(opts, train_loader, val_loader, game, callbacks):
     saver = core.InteractionSaver(
         train_epochs=[],
         test_epochs=[opts.n_epochs],
-        checkpoint_dir="logs/msgs/23042025"
+        checkpoint_dir="logs/msgs/experiment_bee_without_knowing_nest_totalnodes:10"
     )
 
     if opts.print_validation_events == True:
@@ -222,7 +222,7 @@ def perform_training(opts, train_loader, val_loader, game, callbacks):
             + [
                 core.ConsoleLogger(print_train_loss=True, as_json=True),
                 core.PrintValidationEvents(n_epochs=opts.n_epochs),
-                # DataLogger(save_path="logs/run1_bee_totalnodes:10.json"),
+                # DataLogger(save_path="logs/run3_bee_without_knowing_nest_totalnodes:10.json"),
                 # saver
             ],
         )
