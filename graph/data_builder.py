@@ -57,7 +57,7 @@ def get_nest_and_food_indices(data: Data) -> (int, int):
     return nest_indices.item(), food_indices.item()
 
 if __name__ == '__main__':
-    env = Environment(num_nodes=4, connection_prob=0.5)
+    env = Environment(num_nodes=4, extra_degree=0.5)
     data = DataConverter.convert(env)
     print("Converted Data:")
     print("x:", data.x)

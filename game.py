@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import egg.core as core
 from archs.agents import BeeSender, HumanSender, HumanReceiver, BeeReceiver
+from wrappers.wrapper import BeeReinforceWrapper
 from helpers import collate_fn
 from analysis.callbacks import DataLogger
 
@@ -101,6 +102,7 @@ def loss(_sender_input, _message, _receiver_input, receiver_output, labels, _aux
     return loss, {"acc": avg_acc}
 
 def get_game(opts):
+    keep_dims = []
     if opts.communication_type == "bee":
         sender = BeeSender(
             num_node_features=opts.num_node_features,
@@ -114,9 +116,9 @@ def get_game(opts):
         receiver = BeeReceiver(
             num_node_features=opts.num_node_features,
             embedding_size=opts.receiver_embedding,
-            hidden_size=opts.receiver_hidden,
             vocab_size=vocab_size,
-            num_relations=opts.num_relations
+            num_relations=opts.num_relations,
+            keep_dims=keep_dims
         )
     else:
         sender = HumanSender(
@@ -135,7 +137,8 @@ def get_game(opts):
         embedding_size=opts.receiver_embedding,
         hidden_size=opts.receiver_hidden,
         vocab_size=vocab_size,
-        num_relations=opts.num_relations
+        num_relations=opts.num_relations,
+        keep_dims=keep_dims
     )
 
     if opts.mode.lower() == "gs":
@@ -163,6 +166,7 @@ def get_game(opts):
         callbacks = [core.TemperatureUpdater(agent=sender, decay=0.9, minimum=0.1)]
     elif opts.mode.lower() == "rf":
         if opts.communication_type == "bee":
+            sender = BeeReinforceWrapper(sender)
             receiver = core.ReinforceWrapper(receiver)
             game = core.SymbolGameReinforce(
                 sender,
@@ -205,7 +209,7 @@ def perform_training(opts, train_loader, val_loader, game, callbacks):
     saver = core.InteractionSaver(
         train_epochs=[],
         test_epochs=[opts.n_epochs],
-        checkpoint_dir="logs/msgs"
+        checkpoint_dir="logs/msgs/experiment_bee_without_knowing_nest_totalnodes:10"
     )
 
     if opts.print_validation_events == True:
@@ -218,8 +222,8 @@ def perform_training(opts, train_loader, val_loader, game, callbacks):
             + [
                 core.ConsoleLogger(print_train_loss=True, as_json=True),
                 core.PrintValidationEvents(n_epochs=opts.n_epochs),
-                DataLogger(save_path="logs/run1_human_data:20nodes.json"),
-                saver
+                # DataLogger(save_path="logs/run3_bee_without_knowing_nest_totalnodes:10.json"),
+                # saver
             ],
         )
     else:
@@ -230,7 +234,6 @@ def perform_training(opts, train_loader, val_loader, game, callbacks):
             validation_data=val_loader,
             callbacks=callbacks
             + [core.ConsoleLogger(print_train_loss=True, as_json=True),
-               saver
                ]
         )
 
