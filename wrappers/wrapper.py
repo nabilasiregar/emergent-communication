@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.distributions import Categorical, Normal
+import torch.nn.functional as F
 
 class BeeReinforceWrapper(nn.Module):
     def __init__(self, sender):
@@ -39,4 +40,27 @@ class BeeReinforceWrapper(nn.Module):
         entropy  = ent_d  + ent_c 
 
         return message, log_prob, entropy
+class BeeGSWrapper(nn.Module):
+    def __init__(self, core_sender: nn.Module, temperature: float = 1.0, hard: bool = True):
+        super().__init__()
+        self.core = core_sender
+        self.temperature = temperature 
+        self.hard = hard
+
+    def forward(self, x, aux_input):
+        out = self.core(x, aux_input)
+        logits = out['discrete_logits']
+        mu, logvar = out['mu'], out['logvar']
+
+        disc_soft = F.gumbel_softmax(
+            logits,
+            tau=self.temperature,
+            hard=self.hard,
+            dim=-1
+        )
+
+        eps = torch.randn_like(mu)
+        dist = mu + eps * torch.exp(0.5 * logvar)
+        return torch.cat([disc_soft, dist], dim=1)
+
 

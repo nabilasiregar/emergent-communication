@@ -3,8 +3,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import egg.core as core
-from archs.agents import BeeSender, HumanSender, HumanReceiver, BeeReceiver
-from wrappers.wrapper import BeeReinforceWrapper
+from archs.agents import HumanSender, HumanReceiver
 from helpers import collate_fn
 from analysis.callbacks import DataLogger
 
@@ -54,26 +53,32 @@ def get_params(params):
     parser.add_argument(
         "--sender_hidden",
         type=int,
-        default=10,
-        help="Size of the hidden layer of Sender (default: 10)",
+        default=32,
+        help="Size of the hidden layer of Sender (default: 128)",
     )
     parser.add_argument(
         "--receiver_hidden",
         type=int,
-        default=10,
-        help="Size of the hidden layer of Receiver (default: 10)",
+        default=32,
+        help="Size of the hidden layer of Receiver (default: 128)",
     )
     parser.add_argument(
         "--sender_embedding",
         type=int,
-        default=10,
-        help="Output dimensionality of the layer that embeds symbols produced at previous step in Sender (default: 10)",
+        default=32,
+        help="Output dimensionality of the layer that embeds symbols produced at previous step in Sender (default: 128)",
     )
     parser.add_argument(
         "--receiver_embedding",
         type=int,
+        default=32,
+        help="Output dimensionality of the layer that embeds the message symbols for Receiver (default: 128)",
+    )
+    parser.add_argument(
+        "--distance_bins",
+        type=int,
         default=10,
-        help="Output dimensionality of the layer that embeds the message symbols for Receiver (default: 10)",
+        help="Number of bins to discretize continuous distances for the RGCNConv",
     )
     # arguments controlling the script output
     parser.add_argument(
@@ -94,24 +99,35 @@ def get_params(params):
     return args
 
 def loss(_sender_input, _message, _receiver_input, receiver_output, labels, _aux_input):
-    acc = (receiver_output == labels).float()
-    loss = -acc
-    avg_acc = acc.mean()       
-    avg_acc = avg_acc.unsqueeze(0)
+    """
+    Accuracy loss - non-differetiable hence cannot be used with GS
+    """
+    acc = (labels == receiver_output).float()
+    return -acc, {"acc": acc}
 
     return loss, {"acc": avg_acc}
 
+def loss_nll(_sender_input, _message, _receiver_input, receiver_output, labels, _aux_input):
+    """
+    NLL loss - differentiable and can be used with both GS and Reinforce
+    """
+    nll = F.nll_loss(receiver_output, labels, reduction="none")
+    acc = (labels == receiver_output.argmax(dim=1)).float().mean()
+    return nll, {"acc": acc}
+
+
 def get_game(opts):
-    keep_dims = []
+    keep_dims = [0] # receiver does not get node‑type one‑hots apart from nest node
     if opts.communication_type == "bee":
+        vocab_size = opts.num_relations
+        max_len = 2
+
         sender = BeeSender(
             num_node_features=opts.num_node_features,
             embedding_size=opts.sender_embedding,
             hidden_size=opts.sender_hidden,
             num_relations=opts.num_relations
         )
-        vocab_size = opts.num_relations + 1
-        max_len = 2
 
         receiver = BeeReceiver(
             num_node_features=opts.num_node_features,
@@ -122,48 +138,54 @@ def get_game(opts):
         )
     else:
         sender = HumanSender(
-            num_node_features=opts.num_node_features,
-            embedding_size=opts.sender_embedding,
-            hidden_size=opts.sender_hidden,
-            num_relations=opts.num_relations,
-            vocab_size=opts.vocab_size,
-            max_len=opts.max_len
-        )
-        vocab_size = opts.vocab_size
-        max_len = opts.max_len
-
-        receiver = HumanReceiver(
-        num_node_features=opts.num_node_features,
-        embedding_size=opts.receiver_embedding,
-        hidden_size=opts.receiver_hidden,
-        vocab_size=vocab_size,
-        num_relations=opts.num_relations,
-        keep_dims=keep_dims
+            node_feat_dim = opts.num_node_features,
+            embed_dim     = opts.sender_embedding,
+            hidden_size   = opts.sender_hidden,
+            num_rel       = opts.num_relations,
+            num_distance_bins = opts.distance_bins
     )
 
+        receiver = HumanReceiver(
+            node_feat_dim = opts.num_node_features,
+            embed_dim     = opts.receiver_embedding,
+            hidden_size   = opts.receiver_hidden,
+            num_rel       = opts.num_relations,
+            num_distance_bins = opts.distance_bins,
+            keep_dims=keep_dims
+        )
+
     if opts.mode.lower() == "gs":
-        sender = core.RnnSenderGS(
-            sender,
-            vocab_size=vocab_size,
-            embed_dim=opts.sender_embedding,
-            hidden_size=opts.sender_hidden,
-            max_len=max_len,
-            temperature=opts.temperature,
-            cell=opts.sender_cell
-        )
-        receiver = core.RnnReceiverGS(
-            receiver,
-            vocab_size=vocab_size,
-            embed_dim=opts.receiver_embedding,
-            hidden_size=opts.receiver_hidden,
-            cell=opts.receiver_cell
-        )
-        game = core.SenderReceiverRnnGS(
-            sender,
-            receiver,
-            loss
-        )
-        callbacks = [core.TemperatureUpdater(agent=sender, decay=0.9, minimum=0.1)]
+        if opts.communication_type == "bee":
+            sender = BeeGSWrapper(sender, temperature=opts.temperature)
+            receiver = BeeReceiverGS(
+                num_node_features=opts.num_node_features,
+                embedding_size=opts.receiver_embedding,
+                vocab_size=vocab_size,
+                num_relations=opts.num_relations,
+                keep_dims=keep_dims,
+            )
+            game = core.SymbolGameGS(sender, receiver, loss_nll)
+        else:
+            sender = core.RnnSenderGS(
+                sender,
+                vocab_size=opts.vocab_size,
+                embed_dim=opts.sender_embedding,
+                hidden_size=opts.sender_hidden,
+                max_len=opts.max_len,
+                temperature=opts.temperature,
+                cell=opts.sender_cell
+            )
+            receiver = core.RnnReceiverGS(
+                receiver,
+                vocab_size=opts.vocab_size,
+                embed_dim=opts.receiver_embedding,
+                hidden_size=opts.receiver_hidden,
+                cell=opts.receiver_cell
+            )
+            game = core.SenderReceiverRnnGS(sender, receiver, loss_nll, length_cost=-0.01)
+            
+        callbacks = []
+        
     elif opts.mode.lower() == "rf":
         if opts.communication_type == "bee":
             sender = BeeReinforceWrapper(sender)
@@ -252,7 +274,6 @@ def main(params):
     val_loader = DataLoader(
         val_dataset, batch_size=opts.batch_size, shuffle=False, collate_fn=collate_fn
     )
-
     game, callbacks = get_game(opts)
     perform_training(opts, train_loader, val_loader, game, callbacks)
 if __name__ == '__main__':
