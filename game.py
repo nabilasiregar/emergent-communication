@@ -1,4 +1,6 @@
 import argparse
+import random
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
@@ -15,6 +17,7 @@ def get_params(params):
     parser.add_argument("--communication_type", choices=["bee", "human"], default="bee")
 
     # arguments concerning the input data and how they are processed
+    parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument(
         "--train_data", type=str, default="data/train_data.pt", help="Path to the train data"
     )
@@ -99,14 +102,22 @@ def get_params(params):
 
     return args
 
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
 def loss(_sender_input, _message, _receiver_input, receiver_output, labels, _aux_input):
     """
     Accuracy loss - non-differetiable hence cannot be used with GS
     """
     acc = (labels == receiver_output).float()
     return -acc, {"acc": acc}
-
-    return loss, {"acc": avg_acc}
 
 def loss_nll(_sender_input, _message, _receiver_input, receiver_output, labels, _aux_input):
     """
@@ -263,15 +274,18 @@ def perform_training(opts, train_loader, val_loader, game, callbacks):
 
 def main(params):
     opts = get_params(params)
+    set_seed(opts.seed)
 
     train_dataset = torch.load(opts.train_data)
     val_dataset = torch.load(opts.validation_data)
 
     train_loader = DataLoader(
-        train_dataset, batch_size=opts.batch_size, shuffle=True, collate_fn=collate_fn
+        train_dataset, batch_size=opts.batch_size, shuffle=True, collate_fn=collate_fn,
+        generator=torch.Generator().manual_seed(opts.seed)
     )
     val_loader = DataLoader(
-        val_dataset, batch_size=opts.batch_size, shuffle=False, collate_fn=collate_fn
+        val_dataset, batch_size=opts.batch_size, shuffle=False, collate_fn=collate_fn,
+         generator=torch.Generator().manual_seed(opts.seed)
     )
     game, callbacks = get_game(opts)
     perform_training(opts, train_loader, val_loader, game, callbacks)
