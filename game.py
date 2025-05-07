@@ -156,7 +156,12 @@ def get_game(opts):
 
     if opts.mode.lower() == "gs":
         if opts.communication_type == "bee":
-            sender = BeeGSWrapper(sender, temperature=opts.temperature, straight_through = False)
+            sender = BeeGSWrapper(sender,
+                                  hidden_size=opts.sender_hidden,
+                                  max_len=opts.max_len, 
+                                  vocab_size=opts.vocab_size, 
+                                  temperature=opts.temperature, 
+                                  straight_through = False)
             
             game = core.SymbolGameGS(sender, receiver, loss_nll)
         else:

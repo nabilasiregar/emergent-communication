@@ -22,42 +22,28 @@ class BeeSender(nn.Module):
     def __init__(self, n_features, embedding_dim, hidden_dim, n_relations):
         super().__init__()
         self.encoder = RGCN(n_features, embedding_dim, n_relations)
-        # vector that gives relative displacement
-        self.fc = nn.Linear(2 * embedding_dim, hidden_dim)
-        self.direction_head = nn.Linear(hidden_dim, n_relations)
-        self.continuous_head = nn.Linear(hidden_dim, 2)
-    
+        self.fc      = nn.Linear(2 * embedding_dim, hidden_dim)
+
     def forward(self, x, aux_input):
-        data = aux_input["data"]
-        # sender agent knows both nest and food positions
-        nest, food = aux_input["nest_tensor"], aux_input["food_tensor"]
+        data, nest, food = aux_input["data"], aux_input["nest_tensor"], aux_input["food_tensor"]
         node = self.encoder(data)
-        # like calculating a distance from nest node to food node 
-        h = torch.tanh(self.fc(torch.cat([node[nest], node[food]], -1)))
-        logits = self.direction_head(h)
-        mu, logvar = self.continuous_head(h).chunk(2, -1)
-        return {"direction_logits": logits, "mu": mu, "logvar": logvar}
+        h    = torch.tanh(self.fc(torch.cat([node[nest], node[food]], dim=-1)))
+        return h 
 
 class BeeReceiver(nn.Module):
-    """
-    Expects message [direction, distance] from sender agent. Scores every node relative to the nest.
-    """
     def __init__(self, n_features, embedding_dim, n_relations, keep_dims=()):
         super().__init__()
-        self.encoder = RGCN(n_features, embedding_dim, n_relations)
-        self.direction_embedding = nn.Embedding(n_relations, embedding_dim)
-        self.distance_fc = nn.Linear(1, embedding_dim)
-        self.merge = nn.Linear(2 * embedding_dim, embedding_dim)
+        self.encoder   = RGCN(n_features, embedding_dim, n_relations)
+        self.token_fc  = nn.Linear(1, embedding_dim)
+        self.merge     = nn.Linear(embedding_dim, embedding_dim)
         self.keep_dims = keep_dims
     
     def forward(self, message, _receiver_input, aux_input):
         data = aux_input["data"]
         nest = aux_input["nest_tensor"]
-        direction_soft, distance = message[:, :-1], message[:, -1].unsqueeze(-1)
 
-        direction_vec  = direction_soft @ self.direction_embedding.weight
-        distance_vec = F.relu(self.distance_fc(distance))
-        message_vec  = self.merge(torch.cat([direction_vec, distance_vec], -1))
+        token_emb = torch.relu(self.token_fc(message.unsqueeze(-1))) 
+        message_vec = self.merge(token_emb.mean(dim=1))
 
         x_clean = strip_node_types(data.x, self.keep_dims) 
         node = self.encoder(data, x_override=x_clean)
