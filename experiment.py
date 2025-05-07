@@ -1,11 +1,3 @@
-"""
-Usage:
-    python experiment.py \
-        --config config.yaml \
-        --param distance_bins \
-        --values 5 10 20 \
-        --n_runs 3
-"""
 import argparse
 import json
 import pathlib
@@ -15,8 +7,10 @@ from typing import Any, List, Tuple
 import yaml
 import numpy as np
 import torch
+import random
 
 import game
+from game import set_seed
 import egg.core as core
 from torch.utils.data import DataLoader, random_split
 from helpers import collate_fn
@@ -61,18 +55,22 @@ def get_final_acc(log_path: pathlib.Path) -> float:
             acc = float(rec.get('acc', 0.0))
     return acc
 
+
 def run(
     base_cli: List[str],
     param_name: str,
     param_value: Any,
-    run_num: int,
+    run_idx: int,
     log_root: pathlib.Path,
     config: dict
 ) -> float:
-    run_tag = f"run{run_num}"
+    run_tag = f"run{run_idx}"
     cli = base_cli + [f"--{param_name}", str(param_value)]
     opts = game.get_params(cli)
-    opts.seed += run_num
+
+    opts.random_seed = opts.seed
+    set_seed(opts.seed)
+    print(opts)
 
     # split train/validation
     full_train = torch.load(opts.train_data)
@@ -89,17 +87,25 @@ def run(
         train_ds = full_train
         val_ds = torch.load(opts.validation_data)
 
-    train_loader = DataLoader(train_ds, batch_size=opts.batch_size,
-                              shuffle=True, collate_fn=collate_fn)
-    val_loader   = DataLoader(val_ds,   batch_size=opts.batch_size,
-                              shuffle=False, collate_fn=collate_fn)
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=opts.batch_size,
+        shuffle=True,
+        collate_fn=collate_fn
+    )
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=opts.batch_size,
+        shuffle=False,
+        collate_fn=collate_fn
+    )
 
     model, callbacks = game.get_game(opts)
 
-    # set up logging paths
-    run_dir = log_root / f"{param_name}{param_value}_run{run_num}"
+    # set up logging paths using run_tag
+    run_dir = log_root / f"{param_name}{param_value}_{run_tag}"
     run_dir.mkdir(parents=True, exist_ok=True)
-    json_log = run_dir / f"{param_name}{param_value}_run{run_num}.json"
+    json_log = run_dir / f"{param_name}{param_value}_{run_tag}.json"
 
     callbacks.append(DataLogger(save_path=str(json_log)))
     callbacks.append(core.InteractionSaver(
@@ -137,7 +143,6 @@ def main():
     base_cli, default_val = load_defaults(config, args.param)
 
     values = [type(default_val)(v) for v in args.values]
-
     stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     log_root = pathlib.Path('logs') / stamp
     log_root.mkdir(parents=True, exist_ok=True)
