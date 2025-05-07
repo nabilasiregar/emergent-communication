@@ -1,3 +1,45 @@
+## Environment Setup
+### 1. Create a virtual environment
+```
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### 2. Install dependencies
+```
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 3. Install EGG (editable mode)
+```
+git clone git@github.com:facebookresearch/EGG.git
+cd EGG
+pip install -e .
+cd ..
+```
+
+### 4. Apply local modification in EGG
+Important: the following manual edit to EGG/core/interaction.py is required:
+change line 209
+```
+ aux_input[k] = _check_cat([x.aux_input[k] for x in interactions])
+```
+to
+```
+try:
+    aux_input[k] = _check_cat([x.aux_input[k] for x in interactions])
+except Exception as e:
+    aux_input[k] = None
+```
+
+After making the changes, reinstall EGG to reflect the modifications:
+```
+cd EGG
+pip install -e .
+cd ..
+```
+
 ## Environment
 To visualize the environment, run:
 ```
@@ -39,4 +81,12 @@ Add
 DataLogger(save_path="logs/experiment.json")
 ```
 in callbacks
+
+### Running game
+Example:
+```
+python -m game --communication_type bee --mode gs --train_data data/samples:10_000_train_data_totalnodes:10.pt --validation_data data/samples:10_000_test_data_totalnodes:10.pt --max_len 2 --temperature 1.5 --n_epochs 300 --print_validation_events | tee bee.txt
+
+python -m game --communication_type human --mode gs --train_data data/samples:10_000_train_data_totalnodes:10.pt --validation_data data/samples:10_000_test_data_totalnodes:10.pt --max_len 10 --vocab_size 20 --temperature 1.5 --n_epochs 300 --print_validation_events | tee human.txt
+```
 
