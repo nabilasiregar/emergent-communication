@@ -1,0 +1,9 @@
+numpy
+torch
+torch_geometric
+egg  # install via git
+pyyaml
+networkx
+matplotlib
+pandas
+

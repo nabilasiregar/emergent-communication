@@ -1,9 +1,12 @@
 import argparse
+import random
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import egg.core as core
-from archs.agents import BeeSender, HumanSender, HumanReceiver, BeeReceiver
+from archs.agents import HumanSender, HumanReceiver, BeeSender, BeeReceiver
+from wrappers.wrapper import BeeGSWrapper
 from helpers import collate_fn
 from analysis.callbacks import DataLogger
 
@@ -14,6 +17,7 @@ def get_params(params):
     parser.add_argument("--communication_type", choices=["bee", "human"], default="bee")
 
     # arguments concerning the input data and how they are processed
+    parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument(
         "--train_data", type=str, default="data/train_data.pt", help="Path to the train data"
     )
@@ -53,26 +57,32 @@ def get_params(params):
     parser.add_argument(
         "--sender_hidden",
         type=int,
-        default=10,
-        help="Size of the hidden layer of Sender (default: 10)",
+        default=32,
+        help="Size of the hidden layer of Sender (default: 128)",
     )
     parser.add_argument(
         "--receiver_hidden",
         type=int,
-        default=10,
-        help="Size of the hidden layer of Receiver (default: 10)",
+        default=32,
+        help="Size of the hidden layer of Receiver (default: 128)",
     )
     parser.add_argument(
         "--sender_embedding",
         type=int,
-        default=10,
-        help="Output dimensionality of the layer that embeds symbols produced at previous step in Sender (default: 10)",
+        default=32,
+        help="Output dimensionality of the layer that embeds symbols produced at previous step in Sender (default: 128)",
     )
     parser.add_argument(
         "--receiver_embedding",
         type=int,
+        default=32,
+        help="Output dimensionality of the layer that embeds the message symbols for Receiver (default: 128)",
+    )
+    parser.add_argument(
+        "--distance_bins",
+        type=int,
         default=10,
-        help="Output dimensionality of the layer that embeds the message symbols for Receiver (default: 10)",
+        help="Number of bins to discretize continuous distances for the RGCNConv",
     )
     # arguments controlling the script output
     parser.add_argument(
@@ -92,77 +102,105 @@ def get_params(params):
 
     return args
 
-def loss(_sender_input, _message, _receiver_input, receiver_output, labels, _aux_input):
-    acc = (receiver_output == labels).float()
-    loss = -acc
-    avg_acc = acc.mean()       
-    avg_acc = avg_acc.unsqueeze(0)
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
-    return loss, {"acc": avg_acc}
+
+def loss(_sender_input, _message, _receiver_input, receiver_output, labels, _aux_input):
+    """
+    Accuracy loss - non-differetiable hence cannot be used with GS
+    """
+    acc = (labels == receiver_output).float()
+    return -acc, {"acc": acc}
+
+def loss_nll(_sender_input, _message, _receiver_input, receiver_output, labels, _aux_input):
+    """
+    NLL loss - differentiable and can be used with both GS and Reinforce
+    """
+    nll = F.nll_loss(receiver_output, labels, reduction="none")
+    acc = (labels == receiver_output.argmax(dim=1)).float()
+    return nll, {"acc": acc}
+
 
 def get_game(opts):
+    keep_dims = [0] # receiver does not get node‑type one‑hots apart from nest node
     if opts.communication_type == "bee":
-        sender = BeeSender(
-            num_node_features=opts.num_node_features,
-            embedding_size=opts.sender_embedding,
-            hidden_size=opts.sender_hidden,
-            num_relations=opts.num_relations
-        )
-        vocab_size = opts.num_relations + 1
+        vocab_size = opts.num_relations
         max_len = 2
 
+        sender = BeeSender(
+            opts.num_node_features,
+            opts.sender_embedding,
+            opts.sender_hidden,
+            opts.num_relations,
+            opts.distance_bins
+        )
+
         receiver = BeeReceiver(
-            num_node_features=opts.num_node_features,
-            embedding_size=opts.receiver_embedding,
-            hidden_size=opts.receiver_hidden,
-            vocab_size=vocab_size,
-            num_relations=opts.num_relations
+            opts.num_node_features,
+            opts.receiver_embedding,
+            opts.num_relations,
+            opts.distance_bins,
+            keep_dims=keep_dims
         )
     else:
         sender = HumanSender(
-            num_node_features=opts.num_node_features,
-            embedding_size=opts.sender_embedding,
-            hidden_size=opts.sender_hidden,
-            num_relations=opts.num_relations,
-            vocab_size=opts.vocab_size,
-            max_len=opts.max_len
-        )
-        vocab_size = opts.vocab_size
-        max_len = opts.max_len
-
-        receiver = HumanReceiver(
-        num_node_features=opts.num_node_features,
-        embedding_size=opts.receiver_embedding,
-        hidden_size=opts.receiver_hidden,
-        vocab_size=vocab_size,
-        num_relations=opts.num_relations
+            node_feat_dim = opts.num_node_features,
+            embed_dim     = opts.sender_embedding,
+            hidden_size   = opts.sender_hidden,
+            num_rel       = opts.num_relations,
+            num_distance_bins = opts.distance_bins
     )
 
+        receiver = HumanReceiver(
+            node_feat_dim = opts.num_node_features,
+            embed_dim     = opts.receiver_embedding,
+            hidden_size   = opts.receiver_hidden,
+            num_rel       = opts.num_relations,
+            num_distance_bins = opts.distance_bins,
+            keep_dims=keep_dims
+        )
+
     if opts.mode.lower() == "gs":
-        sender = core.RnnSenderGS(
-            sender,
-            vocab_size=vocab_size,
-            embed_dim=opts.sender_embedding,
-            hidden_size=opts.sender_hidden,
-            max_len=max_len,
-            temperature=opts.temperature,
-            cell=opts.sender_cell
-        )
-        receiver = core.RnnReceiverGS(
-            receiver,
-            vocab_size=vocab_size,
-            embed_dim=opts.receiver_embedding,
-            hidden_size=opts.receiver_hidden,
-            cell=opts.receiver_cell
-        )
-        game = core.SenderReceiverRnnGS(
-            sender,
-            receiver,
-            loss
-        )
-        callbacks = [core.TemperatureUpdater(agent=sender, decay=0.9, minimum=0.1)]
+        if opts.communication_type == "bee":
+            sender = BeeGSWrapper(sender,
+                                  hidden_size=opts.sender_hidden,
+                                  max_len=opts.max_len, 
+                                  vocab_size=opts.vocab_size, 
+                                  temperature=opts.temperature, 
+                                  straight_through = False)
+            
+            game = core.SymbolGameGS(sender, receiver, loss_nll)
+        else:
+            sender = core.RnnSenderGS(
+                sender,
+                vocab_size=opts.vocab_size,
+                embed_dim=opts.sender_embedding,
+                hidden_size=opts.sender_hidden,
+                max_len=opts.max_len,
+                temperature=opts.temperature,
+                cell=opts.sender_cell
+            )
+            receiver = core.RnnReceiverGS(
+                receiver,
+                vocab_size=opts.vocab_size,
+                embed_dim=opts.receiver_embedding,
+                hidden_size=opts.receiver_hidden,
+                cell=opts.receiver_cell
+            )
+            game = core.SenderReceiverRnnGS(sender, receiver, loss_nll, length_cost=-0.1)
+            
+        callbacks = []
+        
     elif opts.mode.lower() == "rf":
         if opts.communication_type == "bee":
+            sender = BeeReinforceWrapper(sender)
             receiver = core.ReinforceWrapper(receiver)
             game = core.SymbolGameReinforce(
                 sender,
@@ -202,6 +240,12 @@ def get_game(opts):
 def perform_training(opts, train_loader, val_loader, game, callbacks):
     optimizer = core.build_optimizer(game.parameters())
 
+    saver = core.InteractionSaver(
+        train_epochs=[],
+        test_epochs=[opts.n_epochs],
+        checkpoint_dir="logs/msgs/experiment_bee_without_knowing_nest_totalnodes:10"
+    )
+
     if opts.print_validation_events == True:
         trainer = core.Trainer(
             game=game,
@@ -212,7 +256,8 @@ def perform_training(opts, train_loader, val_loader, game, callbacks):
             + [
                 core.ConsoleLogger(print_train_loss=True, as_json=True),
                 core.PrintValidationEvents(n_epochs=opts.n_epochs),
-                DataLogger(save_path="logs/experiment_bee_totalnodes:50.json")
+                # DataLogger(save_path="logs/run3_bee_without_knowing_nest_totalnodes:10.json"),
+                # saver
             ],
         )
     else:
@@ -222,7 +267,8 @@ def perform_training(opts, train_loader, val_loader, game, callbacks):
             train_data=train_loader,
             validation_data=val_loader,
             callbacks=callbacks
-            + [core.ConsoleLogger(print_train_loss=True, as_json=True)],
+            + [core.ConsoleLogger(print_train_loss=True, as_json=True),
+               ]
         )
 
     trainer.train(n_epochs=opts.n_epochs)
@@ -230,17 +276,19 @@ def perform_training(opts, train_loader, val_loader, game, callbacks):
 
 def main(params):
     opts = get_params(params)
+    set_seed(opts.seed)
 
     train_dataset = torch.load(opts.train_data)
     val_dataset = torch.load(opts.validation_data)
 
     train_loader = DataLoader(
-        train_dataset, batch_size=opts.batch_size, shuffle=True, collate_fn=collate_fn
+        train_dataset, batch_size=opts.batch_size, shuffle=True, collate_fn=collate_fn,
+        generator=torch.Generator().manual_seed(opts.seed)
     )
     val_loader = DataLoader(
-        val_dataset, batch_size=opts.batch_size, shuffle=False, collate_fn=collate_fn
+        val_dataset, batch_size=opts.batch_size, shuffle=False, collate_fn=collate_fn,
+         generator=torch.Generator().manual_seed(opts.seed)
     )
-
     game, callbacks = get_game(opts)
     perform_training(opts, train_loader, val_loader, game, callbacks)
 if __name__ == '__main__':

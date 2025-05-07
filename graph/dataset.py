@@ -5,10 +5,10 @@ from graph.environment import Environment
 from graph.data_builder import DataConverter, get_nest_and_food_indices
 import pdb
 class GraphDataset(Dataset):
-    def __init__(self, num_samples: int = 100, num_nodes: int = 6, connection_prob: float = 0.3):
+    def __init__(self, num_samples: int = 100, num_nodes: int = 6, extra_degree: float = 0.5):
         self.samples = []
         for _ in range(num_samples):
-            env = Environment(num_nodes=num_nodes, connection_prob=connection_prob)
+            env = Environment(num_nodes=num_nodes, extra_degree=extra_degree)
             data = DataConverter.convert(env)
             nest_id, food_id = get_nest_and_food_indices(data)
             self.samples.append((data, nest_id, food_id))
@@ -19,9 +19,8 @@ class GraphDataset(Dataset):
     def __getitem__(self, index: int):
         return self.samples[index]
 
-def create_dataset(num_samples=100, num_nodes=6, connection_prob=0.3, train_ratio=0.8):
-    # later add a handler so user can only initiate with minimum 2 number of nodes (food and nest node)
-    dataset = GraphDataset(num_samples=num_samples, num_nodes=num_nodes, connection_prob=connection_prob)
+def create_dataset(num_samples=100, num_nodes=6, extra_degree=0.5, train_ratio=0.8):
+    dataset = GraphDataset(num_samples=num_samples, num_nodes=num_nodes, extra_degree=extra_degree)
     train_size = int(train_ratio * len(dataset))
     val_size = len(dataset) - train_size
 
@@ -38,8 +37,8 @@ def main():
                         help="Total number of graph samples to generate (default: 500)")
     parser.add_argument("--num_nodes", type=int, default=5,
                         help="Number of nodes in each graph (default: 5)")
-    parser.add_argument("--connection_prob", type=float, default=0.3,
-                        help="Probability of connection between nodes (default: 0.3)")
+    parser.add_argument("--extra_degree", type=float, default=0.5,
+                        help="Probability of adding extra degree of a node (default: 0.5)")
     parser.add_argument("--train_ratio", type=float, default=0.8,
                         help="Ratio of samples for the training set (default: 0.8)")
     parser.add_argument("--train_output", type=str, default="train_data.pt",
@@ -49,7 +48,7 @@ def main():
     
     args = parser.parse_args()
     
-    train_set, test_set = create_dataset(args.num_samples, args.num_nodes, args.connection_prob, args.train_ratio)
+    train_set, test_set = create_dataset(args.num_samples, args.num_nodes, args.extra_degree, args.train_ratio)
     
     torch.save(train_set, args.train_output)
     torch.save(test_set, args.test_output)
