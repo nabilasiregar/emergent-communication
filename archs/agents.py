@@ -5,23 +5,11 @@ from archs.arch import RGCN
 from helpers import strip_node_types
 from torch.distributions import Categorical
 import pdb
-
-class GraphEncoder(nn.Module):
-    def __init__(self, in_dim: int, hid_dim: int, num_rel: int, num_distance_bins: int):
-        super().__init__()
-        self.rgcn = RGCN(
-            in_dim, hid_dim, num_rel, num_distance_bins,
-            distance_embedding_dim=8,
-            num_bases=None
-        )
-
-    def forward(self, data, x_override=None):
-        return self.rgcn(data, x_override)
     
 class BeeSender(nn.Module):
-    def __init__(self, n_features, embedding_dim, hidden_dim, n_relations):
+    def __init__(self, n_features, embedding_dim, hidden_dim, n_relations, num_distance_bins):
         super().__init__()
-        self.encoder = RGCN(n_features, embedding_dim, n_relations)
+        self.encoder = RGCN(n_features, embedding_dim, n_relations, num_distance_bins)
         self.fc      = nn.Linear(2 * embedding_dim, hidden_dim)
 
     def forward(self, x, aux_input):
@@ -31,9 +19,9 @@ class BeeSender(nn.Module):
         return h 
 
 class BeeReceiver(nn.Module):
-    def __init__(self, n_features, embedding_dim, n_relations, keep_dims=()):
+    def __init__(self, n_features, embedding_dim, n_relations, num_distance_bins, keep_dims=()):
         super().__init__()
-        self.encoder   = RGCN(n_features, embedding_dim, n_relations)
+        self.encoder   = RGCN(n_features, embedding_dim, n_relations, num_distance_bins)
         self.token_fc  = nn.Linear(1, embedding_dim)
         self.merge     = nn.Linear(embedding_dim, embedding_dim)
         self.keep_dims = keep_dims
@@ -59,7 +47,7 @@ class BeeReceiver(nn.Module):
 class HumanSender(nn.Module):
     def __init__(self, node_feat_dim, embed_dim, hidden_size, num_rel, num_distance_bins):
         super().__init__()
-        self.encoder = GraphEncoder(node_feat_dim, embed_dim, num_rel, num_distance_bins)
+        self.encoder = RGCN(node_feat_dim, embed_dim, num_rel, num_distance_bins)
         self.fc  = nn.Linear(2 * embed_dim, hidden_size)
 
     def forward(self, x, aux_input):
@@ -86,7 +74,7 @@ class HumanReceiver(nn.Module):
     ):
         super().__init__()
         self.keep_dims = keep_dims
-        self.encoder = GraphEncoder(node_feat_dim, embed_dim, num_rel, num_distance_bins)
+        self.encoder = RGCN(node_feat_dim, embed_dim, num_rel, num_distance_bins)
         self.message_fc = nn.Linear(hidden_size, embed_dim)
 
     @staticmethod

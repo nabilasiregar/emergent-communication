@@ -138,13 +138,15 @@ def get_game(opts):
             opts.num_node_features,
             opts.sender_embedding,
             opts.sender_hidden,
-            opts.num_relations
+            opts.num_relations,
+            opts.distance_bins
         )
 
         receiver = BeeReceiver(
             opts.num_node_features,
             opts.receiver_embedding,
             opts.num_relations,
+            opts.distance_bins,
             keep_dims=keep_dims
         )
     else:
