@@ -24,3 +24,8 @@ def collate_fn(batch):
         'food_tensor': food_tensor
     }
     return sender_input, labels, receiver_input, aux_input
+
+def strip_node_types(x, keep_dims):
+    out = torch.zeros_like(x)
+    out[:, keep_dims] = x[:, keep_dims]
+    return out

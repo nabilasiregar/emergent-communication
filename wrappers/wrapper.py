@@ -1,42 +1,59 @@
 import torch
 import torch.nn as nn
-from torch.distributions import Categorical, Normal
+from egg.core.gs_wrappers import gumbel_softmax_sample
 
-class BeeReinforceWrapper(nn.Module):
-    def __init__(self, sender):
+class BeeGSWrapper(nn.Module):
+    """
+    A wrapper that lets each token emerge as either discrete-like
+    or continuous-like.
+    """
+    def __init__(
+        self,
+        sender: nn.Module,
+        hidden_size: int,
+        max_len: int = 2,
+        vocab_size: int = 8,
+        temperature: float = 1.0,
+        straight_through: bool = False,
+    ):
         super().__init__()
-        self.sender = sender
+        self.core = sender
+        self.max_len = max_len
+        self.vocab = vocab_size
+        self.tau = temperature
+        self.st = straight_through
 
-    def forward(self, *args, **kwargs):
-        out = self.sender(*args, **kwargs)
-        logits = out['discrete_logits']
-        mu, logvar = out['mu'], out['logvar']
+        self.switch_head = nn.Linear(hidden_size,  self.max_len * 2)
+        self.disc_head   = nn.Linear(hidden_size,  self.max_len * self.vocab)
+        self.mu_head     = nn.Linear(hidden_size,  self.max_len)
+        self.logvar_head = nn.Linear(hidden_size,  self.max_len)
 
-        # --- Discrete ---
-        distr_d = Categorical(logits=logits)
-        if self.training:
-            token_d = distr_d.sample()      
-        else:
-            token_d = logits.argmax(dim=1)  
-        logp_d   = distr_d.log_prob(token_d)  
-        ent_d    = distr_d.entropy() 
+    def forward(self, sinp, aux):
+        h   = self.core(sinp, aux)
+        B   = h.size(0)
 
-        # --- Continuous ---
-        # clamp logvar to avoid numerical issues
-        logvar = torch.clamp(logvar, -5.0, 5.0)
-        std     = torch.exp(0.5 * logvar)
-        distr_c = Normal(mu, std)
-        if self.training:
-            token_c = distr_c.rsample().squeeze(-1) 
-        else:
-            token_c = mu.squeeze(-1)            
-        logp_c   = distr_c.log_prob(token_c).sum(dim=-1) 
-        ent_c    = distr_c.entropy().sum(dim=-1)   
+        switch_logits = self.switch_head(h).view(B, self.max_len, 2)
+        disc_logits   = self.disc_head(h).view(B, self.max_len, self.vocab)
+        mu            = self.mu_head(h).view(B, self.max_len)
+        logvar        = self.logvar_head(h).view(B, self.max_len)
 
-        # discrete token as float in channel 0, continuous in channel 1
-        message = torch.stack([token_d.float(), token_c], dim=1)
-        log_prob = logp_d + logp_c 
-        entropy  = ent_d  + ent_c 
+        # choose token type: discrete or continuous
+        mode = gumbel_softmax_sample(
+            switch_logits.view(-1, 2), self.tau, self.training, self.st
+        ).view(B, self.max_len, 2)
+        disc_mask = mode[..., 0:1]
+        cont_mask = mode[..., 1:2]
 
-        return message, log_prob, entropy
+        # disc
+        disc_onehot = gumbel_softmax_sample(
+            disc_logits.view(-1, self.vocab), self.tau, self.training, self.st
+        ).view(B, self.max_len, self.vocab)
+        disc_scalar = disc_onehot.argmax(dim=-1, keepdim=True).float() / (self.vocab - 1)
 
+        # continuous
+        eps          = torch.randn_like(mu)
+        cont_scalar  = (mu + eps * torch.exp(0.5 * logvar)).unsqueeze(-1)
+
+        token = disc_mask * disc_scalar + cont_mask * cont_scalar
+
+        return token.squeeze(-1)

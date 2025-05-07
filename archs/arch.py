@@ -1,44 +1,79 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import RGCNConv, NNConv
+from torch_geometric.nn import RGCNConv
 import pdb
 
-class GNN(nn.Module):
-    def __init__(self, num_node_features, embedding_size, num_relations=8, num_layers=5):
+class DistanceEmbedding(nn.Sequential):
+    def __init__(self, hidden_dim: int = 32):
+        super().__init__(
+            nn.Linear(1, hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Softplus()
+        )
+
+    def forward(self, d: torch.Tensor) -> torch.Tensor:
+        return super().forward(d).squeeze(-1)
+    
+class RGCN(nn.Module):
+    """
+    Edge attributes are expected in the form (distance, direction) where:
+        - distance is a float (edge weight)
+        - direction is an integer (edge type)
+    """
+    def __init__(self,
+        node_feature_dim: int,
+        hidden_feature_dim: int,
+        num_relations: int,
+        num_distance_bins: int = 3,
+        distance_embedding_dim: int = 32,
+        num_bases: int | None = None,
+        aggr: str = "mean"
+    ):
         super().__init__()
-        self.num_relations = num_relations
-        self.input_fc = nn.Linear(num_node_features, embedding_size)
-        self.rgcn_convs = nn.ModuleList([
-            RGCNConv(embedding_size, embedding_size, num_relations)
-            for _ in range(num_layers)
-        ])
 
-        self.edge_mlp = nn.Sequential(
-            nn.Linear(1 + num_relations, embedding_size),
-            nn.ReLU(),
-            nn.Linear(embedding_size, embedding_size * embedding_size)
+        self.num_distance_bins = num_distance_bins
+        total_relations = num_relations * self.num_distance_bins
+
+        self.conv1 = RGCNConv(
+            in_channels=node_feature_dim,
+            out_channels=hidden_feature_dim,
+            num_relations=total_relations,
+            num_bases=num_bases,
+            aggr=aggr
         )
 
-        self.nnconv_layers = nn.ModuleList(
-            NNConv(embedding_size,embedding_size, self.edge_mlp, aggr='mean')
-            for _ in range(num_layers)
+        self.conv2 = RGCNConv(
+            in_channels=hidden_feature_dim,
+            out_channels=hidden_feature_dim,
+            num_relations=total_relations,
+            num_bases=num_bases,
+            aggr=aggr
         )
+
+        self.distance_embedding = DistanceEmbedding(distance_embedding_dim)
+        self.bias = nn.Parameter(torch.zeros(hidden_feature_dim))
+    
+    @staticmethod
+    def _split(edge_attr: torch.Tensor):
+        distances = edge_attr[:, 0].unsqueeze(-1) 
+        relation_types = edge_attr[:, 1].long()
+        return distances, relation_types
 
     def forward(self, data, x_override=None):
-        x = x_override if x_override is not None else data.x
-        edge_index, edge_attr = data.edge_index, data.edge_attr
-        if x_override is not None:
-            assert torch.equal(x, data.x) is False 
-        edge_type = edge_attr[:, 1].long()
-        edge_distance = edge_attr[:, 0].unsqueeze(-1)
-        dir_onehot  = F.one_hot(edge_type, self.num_relations).float()
-        edge_attr_c = torch.cat([edge_distance, dir_onehot], dim=1) 
-        h = F.relu(self.input_fc(x))
+        x = data.x if x_override is None else x_override
+        distances, directions = self._split(data.edge_attr)
+        distance_vals = distances.squeeze(-1).contiguous()
+        max_d = float(distance_vals.max().item())
+        edges = torch.linspace(0.0, max_d, self.num_distance_bins + 1,device=distance_vals.device)[1:-1]
+        distance_bins = torch.bucketize(distance_vals, edges)
+        combined_edge_info = directions * self.num_distance_bins + distance_bins
+        # first hop
+        x = F.relu(
+            self.conv1(x, data.edge_index, edge_type=combined_edge_info)
+        )
 
-        for rgcn, nnconv in zip(self.rgcn_convs, self.nnconv_layers):
-            h_disc = F.relu(rgcn(h, edge_index, edge_type))
-            h_cont = F.relu(nnconv(h, edge_index, edge_attr_c))
-            h      = h + h_disc + h_cont
-        
-        return h
+        # second hop
+        x = self.conv2(x, data.edge_index, edge_type=combined_edge_info)
+        return x + self.bias
