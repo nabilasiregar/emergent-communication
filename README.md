@@ -21,7 +21,7 @@ python -m graph.data_builder
 
 Example:
 ```
-python -m graph.dataset --num_samples 500 --num_nodes 10 --train_ratio 0.8 --train_output data/sparse500_train_data_totalnodes:10.pt --test_output data/sparse500_test_data_totalnodes:10.pt
+python -m graph.dataset --num_samples 10000 --num_nodes 10 --train_ratio 0.8 --train_output data/samples:10_000_train_data_totalnodes:10.pt --test_output data/samples:10_000_test_data_totalnodes:10.pt
 ```
 
 ## Vocab size

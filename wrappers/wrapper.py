@@ -1,66 +1,26 @@
-import torch
-import torch.nn as nn
-from torch.distributions import Categorical, Normal
-import torch.nn.functional as F
+import torch, torch.nn as nn, torch.nn.functional as F
+from egg.core.gs_wrappers import gumbel_softmax_sample
+import pdb
 
-class BeeReinforceWrapper(nn.Module):
-    def __init__(self, sender):
-        super().__init__()
-        self.sender = sender
-
-    def forward(self, *args, **kwargs):
-        out = self.sender(*args, **kwargs)
-        logits = out['discrete_logits']
-        mu, logvar = out['mu'], out['logvar']
-
-        # --- Discrete ---
-        distr_d = Categorical(logits=logits)
-        if self.training:
-            token_d = distr_d.sample()      
-        else:
-            token_d = logits.argmax(dim=1)  
-        logp_d   = distr_d.log_prob(token_d)  
-        ent_d    = distr_d.entropy() 
-
-        # --- Continuous ---
-        # clamp logvar to avoid numerical issues
-        logvar = torch.clamp(logvar, -5.0, 5.0)
-        std     = torch.exp(0.5 * logvar)
-        distr_c = Normal(mu, std)
-        if self.training:
-            token_c = distr_c.rsample().squeeze(-1) 
-        else:
-            token_c = mu.squeeze(-1)            
-        logp_c   = distr_c.log_prob(token_c).sum(dim=-1) 
-        ent_c    = distr_c.entropy().sum(dim=-1)   
-
-        # discrete token as float in channel 0, continuous in channel 1
-        message = torch.stack([token_d.float(), token_c], dim=1)
-        log_prob = logp_d + logp_c 
-        entropy  = ent_d  + ent_c 
-
-        return message, log_prob, entropy
 class BeeGSWrapper(nn.Module):
-    def __init__(self, core_sender: nn.Module, temperature: float = 1.0, hard: bool = True):
+    """
+    Wraps BeeSender which returns differentiable message tensor
+       shape = (B, n_relations + 1)
+    """
+    def __init__(self, sender_core, temperature=1.0, straight_through=False):
         super().__init__()
-        self.core = core_sender
-        self.temperature = temperature 
-        self.hard = hard
+        self.core = sender_core
+        self.temp = temperature
+        self.st  = straight_through
 
-    def forward(self, x, aux_input):
-        out = self.core(x, aux_input)
-        logits = out['discrete_logits']
-        mu, logvar = out['mu'], out['logvar']
-
-        disc_soft = F.gumbel_softmax(
-            logits,
-            tau=self.temperature,
-            hard=self.hard,
-            dim=-1
-        )
-
-        eps = torch.randn_like(mu)
-        dist = mu + eps * torch.exp(0.5 * logvar)
-        return torch.cat([disc_soft, dist], dim=1)
-
+    def forward(self, sinp, aux):
+        out = self.core(sinp, aux)
+        # discrete token
+        y = gumbel_softmax_sample(out["direction_logits"],
+                                  self.temp, self.training, self.st)
+        # continuous token
+        mu, logvar = out["mu"], out["logvar"]
+        eps  = torch.randn_like(mu)
+        distance = mu + eps * torch.exp(0.5 * logvar)
+        return torch.cat([y, distance], -1)
 

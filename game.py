@@ -3,7 +3,8 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import egg.core as core
-from archs.agents import HumanSender, HumanReceiver
+from archs.agents import HumanSender, HumanReceiver, BeeSender, BeeReceiver
+from wrappers.wrapper import BeeGSWrapper
 from helpers import collate_fn
 from analysis.callbacks import DataLogger
 
@@ -112,7 +113,7 @@ def loss_nll(_sender_input, _message, _receiver_input, receiver_output, labels, 
     NLL loss - differentiable and can be used with both GS and Reinforce
     """
     nll = F.nll_loss(receiver_output, labels, reduction="none")
-    acc = (labels == receiver_output.argmax(dim=1)).float().mean()
+    acc = (labels == receiver_output.argmax(dim=1)).float()
     return nll, {"acc": acc}
 
 
@@ -123,17 +124,16 @@ def get_game(opts):
         max_len = 2
 
         sender = BeeSender(
-            num_node_features=opts.num_node_features,
-            embedding_size=opts.sender_embedding,
-            hidden_size=opts.sender_hidden,
-            num_relations=opts.num_relations
+            opts.num_node_features,
+            opts.sender_embedding,
+            opts.sender_hidden,
+            opts.num_relations
         )
 
         receiver = BeeReceiver(
-            num_node_features=opts.num_node_features,
-            embedding_size=opts.receiver_embedding,
-            vocab_size=vocab_size,
-            num_relations=opts.num_relations,
+            opts.num_node_features,
+            opts.receiver_embedding,
+            opts.num_relations,
             keep_dims=keep_dims
         )
     else:
@@ -156,14 +156,8 @@ def get_game(opts):
 
     if opts.mode.lower() == "gs":
         if opts.communication_type == "bee":
-            sender = BeeGSWrapper(sender, temperature=opts.temperature)
-            receiver = BeeReceiverGS(
-                num_node_features=opts.num_node_features,
-                embedding_size=opts.receiver_embedding,
-                vocab_size=vocab_size,
-                num_relations=opts.num_relations,
-                keep_dims=keep_dims,
-            )
+            sender = BeeGSWrapper(sender, temperature=opts.temperature, straight_through = False)
+            
             game = core.SymbolGameGS(sender, receiver, loss_nll)
         else:
             sender = core.RnnSenderGS(
@@ -182,7 +176,7 @@ def get_game(opts):
                 hidden_size=opts.receiver_hidden,
                 cell=opts.receiver_cell
             )
-            game = core.SenderReceiverRnnGS(sender, receiver, loss_nll, length_cost=-0.01)
+            game = core.SenderReceiverRnnGS(sender, receiver, loss_nll, length_cost=-0.1)
             
         callbacks = []
         
