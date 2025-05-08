@@ -85,7 +85,7 @@ def run(
         )
     else:
         train_ds = full_train
-        val_ds = torch.load(opts.validation_data)
+        val_ds = torch.load(opts.test_data)
 
     train_loader = DataLoader(
         train_ds,
