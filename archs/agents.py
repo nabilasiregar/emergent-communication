@@ -7,9 +7,9 @@ from torch.distributions import Categorical
 import pdb
     
 class BeeSender(nn.Module):
-    def __init__(self, n_features, embedding_dim, hidden_dim, n_relations, num_distance_bins):
+    def __init__(self, n_features, embedding_dim, hidden_dim, n_relations):
         super().__init__()
-        self.encoder = RGCN(n_features, embedding_dim, n_relations, num_distance_bins)
+        self.encoder = RGCN(n_features, embedding_dim, n_relations)
         self.fc      = nn.Linear(2 * embedding_dim, hidden_dim)
 
     def forward(self, x, aux_input):
@@ -19,9 +19,9 @@ class BeeSender(nn.Module):
         return h 
 
 class BeeReceiver(nn.Module):
-    def __init__(self, n_features, embedding_dim, n_relations, num_distance_bins, keep_dims=()):
+    def __init__(self, n_features, embedding_dim, n_relations, keep_dims=()):
         super().__init__()
-        self.encoder   = RGCN(n_features, embedding_dim, n_relations, num_distance_bins)
+        self.encoder   = RGCN(n_features, embedding_dim, n_relations)
         self.token_fc  = nn.Linear(1, embedding_dim)
         self.merge     = nn.Linear(embedding_dim, embedding_dim)
         self.keep_dims = keep_dims
@@ -30,10 +30,10 @@ class BeeReceiver(nn.Module):
         data = aux_input["data"]
         nest = aux_input["nest_tensor"]
 
-        token_emb = torch.relu(self.token_fc(message.unsqueeze(-1))) 
+        token_emb = torch.relu(self.token_fc(message.unsqueeze(-1)))
         message_vec = self.merge(token_emb.mean(dim=1))
 
-        x_clean = strip_node_types(data.x, self.keep_dims) 
+        x_clean = strip_node_types(data.x, self.keep_dims)
         node = self.encoder(data, x_override=x_clean)
 
         relative = node - node[nest][data.batch]
@@ -45,9 +45,9 @@ class BeeReceiver(nn.Module):
         return F.log_softmax(logits, -1)
 
 class HumanSender(nn.Module):
-    def __init__(self, node_feat_dim, embed_dim, hidden_size, num_rel, num_distance_bins):
+    def __init__(self, node_feat_dim, embed_dim, hidden_size, num_rel):
         super().__init__()
-        self.encoder = RGCN(node_feat_dim, embed_dim, num_rel, num_distance_bins)
+        self.encoder = RGCN(node_feat_dim, embed_dim, num_rel)
         self.fc  = nn.Linear(2 * embed_dim, hidden_size)
 
     def forward(self, x, aux_input):
@@ -69,12 +69,11 @@ class HumanReceiver(nn.Module):
         embed_dim,
         hidden_size,
         num_rel,
-        num_distance_bins,
         keep_dims=(),
     ):
         super().__init__()
         self.keep_dims = keep_dims
-        self.encoder = RGCN(node_feat_dim, embed_dim, num_rel, num_distance_bins)
+        self.encoder = RGCN(node_feat_dim, embed_dim, num_rel)
         self.message_fc = nn.Linear(hidden_size, embed_dim)
 
     @staticmethod
