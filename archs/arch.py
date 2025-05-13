@@ -102,6 +102,9 @@ class RGCN(nn.Module):
         edge_index  = data.edge_index
         edge_weight = data.edge_attr[:, 0]
         edge_type   = data.edge_attr[:, 1].long()
+        # normalize weights, 1e-8 to avoid null division
+        edge_weight = (edge_weight - edge_weight.min()) / (edge_weight.max() - edge_weight.min() + 1e-8)
+
         h = F.relu(self.conv1(x, edge_index, edge_type, edge_weight))
         h = self.conv2(h, edge_index, edge_type, edge_weight)
         return h

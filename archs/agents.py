@@ -9,7 +9,7 @@ import pdb
 class BeeSender(nn.Module):
     def __init__(self, n_features, embedding_dim, hidden_dim, n_relations):
         super().__init__()
-        self.encoder = RGCN(n_features, embedding_dim, n_relations)
+        self.encoder = RGCN(n_features, embedding_dim, n_relations, hidden_channels=hidden_dim)
         self.fc      = nn.Linear(2 * embedding_dim, hidden_dim)
 
     def forward(self, x, aux_input):
@@ -19,19 +19,16 @@ class BeeSender(nn.Module):
         return h 
 
 class BeeReceiver(nn.Module):
-    def __init__(self, n_features, embedding_dim, n_relations, keep_dims=()):
+    def __init__(self, n_features, embedding_dim, hidden_dim, n_relations, keep_dims=()):
         super().__init__()
-        self.encoder   = RGCN(n_features, embedding_dim, n_relations)
-        self.token_fc  = nn.Linear(1, embedding_dim)
-        self.merge     = nn.Linear(embedding_dim, embedding_dim)
+        self.encoder   = RGCN(n_features, embedding_dim, n_relations, hidden_channels=hidden_dim)
+        self.merge     = nn.Linear(hidden_dim, embedding_dim)
         self.keep_dims = keep_dims
     
     def forward(self, message, _receiver_input, aux_input):
         data = aux_input["data"]
         nest = aux_input["nest_tensor"]
-
-        token_emb = torch.relu(self.token_fc(message.unsqueeze(-1)))
-        message_vec = self.merge(token_emb.mean(dim=1))
+        message_vec = torch.relu(self.merge(message))
 
         x_clean = strip_node_types(data.x, self.keep_dims)
         node = self.encoder(data, x_override=x_clean)
@@ -39,9 +36,9 @@ class BeeReceiver(nn.Module):
         relative = node - node[nest][data.batch]
         scores = (relative * message_vec[data.batch]).sum(-1)
 
-        parts = [scores[data.batch == g] for g in range(data.batch.max()+1)]
-        logits = nn.utils.rnn.pad_sequence(parts, batch_first=True,
-                                           padding_value=-float("inf"))
+        B = int(data.batch.max().item()) + 1
+        N = scores.size(0) // B
+        logits = scores.view(B, N)
         return F.log_softmax(logits, -1)
 
 class HumanSender(nn.Module):
@@ -79,10 +76,8 @@ class HumanReceiver(nn.Module):
     @staticmethod
     def _pad_scores(scores: torch.Tensor, batch: torch.Tensor):
         B = int(batch.max().item()) + 1
-        parts = [scores[batch == g] for g in range(B)]
-        return nn.utils.rnn.pad_sequence(
-            parts, batch_first=True, padding_value=float("-inf")
-        )
+        N = scores.numel() // B
+        return scores.view(B, N)
 
     def forward(self, x, _receiver_input, aux_input):
         data       = aux_input["data"]

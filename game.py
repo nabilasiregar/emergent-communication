@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import egg.core as core
 from archs.agents import HumanSender, HumanReceiver, BeeSender, BeeReceiver
-from wrappers.wrapper import BeeGSWrapper
+from wrappers.wrapper import MixedSymbolReceiverWrapper, MixedSymbolSenderWrapper
 from helpers import collate_fn
 from analysis.callbacks import DataLogger
 
@@ -125,9 +125,6 @@ def loss_nll(_sender_input, _message, _receiver_input, receiver_output, labels, 
 def get_game(opts):
     keep_dims = [0] # receiver does not get node‑type one‑hots apart from nest node
     if opts.communication_type == "bee":
-        vocab_size = opts.num_relations
-        max_len = 2
-
         sender = BeeSender(
             opts.num_node_features,
             opts.sender_embedding,
@@ -138,6 +135,7 @@ def get_game(opts):
         receiver = BeeReceiver(
             opts.num_node_features,
             opts.receiver_embedding,
+            opts.receiver_hidden,
             opts.num_relations,
             keep_dims=keep_dims
         )
@@ -159,12 +157,16 @@ def get_game(opts):
 
     if opts.mode.lower() == "gs":
         if opts.communication_type == "bee":
-            sender = BeeGSWrapper(sender,
-                                  hidden_size=opts.sender_hidden,
-                                  max_len=opts.max_len, 
-                                  vocab_size=opts.vocab_size, 
-                                  temperature=opts.temperature, 
-                                  straight_through = False)
+            vocab_size = opts.num_relations
+            sender = MixedSymbolSenderWrapper(sender,
+                                hidden_size=opts.sender_hidden,
+                                vocab_size=vocab_size,
+                                temperature=opts.temperature,
+                                straight_through = False)
+            receiver = MixedSymbolReceiverWrapper(receiver,
+                                vocab_size=vocab_size,
+                                agent_input_size=opts.receiver_hidden
+        )
             
             game = core.SymbolGameGS(sender, receiver, loss_nll)
         else:
@@ -229,7 +231,7 @@ def get_game(opts):
 
 def perform_training(opts, train_loader, val_loader, game, callbacks, device):
     optimizer = core.build_optimizer(game.parameters())
-
+    
     saver = core.InteractionSaver(
         train_epochs=[],
         test_epochs=[opts.n_epochs],
@@ -279,8 +281,8 @@ def main(params):
         persistent_workers=True, num_workers=4, generator=torch.Generator().manual_seed(opts.seed)
     )
     val_loader = DataLoader(
-        val_dataset, batch_size=opts.batch_size, shuffle=False, collate_fn=collate_fn,
-         generator=torch.Generator().manual_seed(opts.seed)
+        val_dataset, batch_size=opts.batch_size, shuffle=False, collate_fn=collate_fn, pin_memory=True,
+        persistent_workers=True, num_workers=4, generator=torch.Generator().manual_seed(opts.seed)
     )
     game, callbacks = get_game(opts)
     game.to(device)
@@ -300,4 +302,4 @@ if __name__ == '__main__':
     stats = pstats.Stats(profiler)
     stats.strip_dirs()                  
     stats.sort_stats(pstats.SortKey.TIME) 
-    stats.print_stats(30) 
+    stats.print_stats(10) 
