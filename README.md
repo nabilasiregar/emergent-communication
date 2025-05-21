@@ -85,8 +85,8 @@ in callbacks
 ### Running game
 Example:
 ```
-python -m game --communication_type bee --mode gs --train_data data/samples:10_000_train_data_totalnodes:10.pt --validation_data data/samples:10_000_test_data_totalnodes:10.pt --max_len 2 --temperature 1.5 --n_epochs 300 --print_validation_events | tee bee.txt
+python -m game --communication_type bee --mode gs --train_data data/samples:10_000_train_data_totalnodes:10.pt --validation_data data/samples:10_000_test_data_totalnodes:10.pt --temperature 1.5 --n_epochs 100
 
-python -m game --communication_type human --mode gs --train_data data/samples:10_000_train_data_totalnodes:10.pt --validation_data data/samples:10_000_test_data_totalnodes:10.pt --max_len 10 --vocab_size 20 --temperature 1.5 --n_epochs 300 --print_validation_events | tee human.txt
+python -m game --communication_type human --mode gs --train_data data/samples:10_000_train_data_totalnodes:10.pt --validation_data data/samples:10_000_test_data_totalnodes:10.pt --max_len 10 --vocab_size 20 --temperature 1.5 --lr 0.0001 --n_epochs 50
 ```
 

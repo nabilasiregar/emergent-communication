@@ -6,9 +6,7 @@ import egg.core as core
 from archs.agents import HumanSender, HumanReceiver, BeeSender, BeeReceiver
 from wrappers.wrapper import MixedSymbolReceiverWrapper, MixedSymbolSenderWrapper
 from helpers import collate_fn, set_seed
-from analysis.callbacks import DataLogger
-
-import pdb
+from analysis.logger import ResultsCollector
 
 def get_params(params):
     parser = argparse.ArgumentParser()
@@ -25,8 +23,8 @@ def get_params(params):
    
     # arguments concerning the training method
     parser.add_argument(
-        "--mode", choices=["rf", "gs"], default="rf",
-        help="Selects whether Reinforce or Gumbel-Softmax relaxation is used for training {rf, gs} (default: rf)"
+        "--mode", choices=["rf", "gs"], default="gs",
+        help="Selects whether Reinforce or Gumbel-Softmax relaxation is used for training {rf, gs} (default: gs)"
     )
     parser.add_argument(
         "--temperature",
@@ -177,81 +175,41 @@ def get_game(opts):
             game = core.SenderReceiverRnnGS(sender, receiver, loss_nll, length_cost=-0.1)
             
         callbacks = []
-        
-    elif opts.mode.lower() == "rf":
-        if opts.communication_type == "bee":
-            sender = BeeReinforceWrapper(sender)
-            receiver = core.ReinforceWrapper(receiver)
-            game = core.SymbolGameReinforce(
-                sender,
-                receiver,
-                loss,
-                sender_entropy_coeff=opts.sender_entropy_coeff,
-                receiver_entropy_coeff=0.01
-            )
-            callbacks = []
-        else:
-            sender = core.RnnSenderReinforce(
-                sender,
-                vocab_size,
-                opts.sender_embedding,
-                opts.sender_hidden,
-                max_len,
-                cell=opts.sender_cell
-            )
-            receiver = core.RnnReceiverReinforce(
-                receiver,
-                vocab_size,
-                embed_dim=opts.receiver_embedding,
-                hidden_size=opts.receiver_hidden,
-                cell=opts.receiver_cell
-            )
-            game = core.SenderReceiverRnnReinforce(
-                sender,
-                receiver,
-                loss,
-                sender_entropy_coeff=opts.sender_entropy_coeff,
-                receiver_entropy_coeff=0.01
-            )
-            callbacks = []
     return game, callbacks
 
 
 def perform_training(opts, train_loader, val_loader, game, callbacks, device):
     optimizer = core.build_optimizer(game.parameters())
-    
-    saver = core.InteractionSaver(
-        train_epochs=[],
-        test_epochs=[opts.n_epochs],
-        checkpoint_dir="logs/msgs/experiment_bee_without_knowing_nest_totalnodes:10"
+    experiment_name = f"baseline_{opts.communication_type}_{opts.mode}_seed{opts.seed}"
+    logger = ResultsCollector(
+        log_dir="logs",
+        experiment_name=experiment_name,
+        log_epoch_summary=True,
+        log_val_interactions=True, 
+        val_interaction_epoch_freq=1,
+        log_train_interactions=False,
+        train_interaction_epoch_freq=10
     )
 
-    if opts.print_validation_events == True:
-        trainer = core.Trainer(
-            game=game,
-            optimizer=optimizer,
-            train_data=train_loader,
-            validation_data=val_loader,
-             device=device,
-            callbacks=callbacks
-            + [
-                core.ConsoleLogger(print_train_loss=True, as_json=True),
-                core.PrintValidationEvents(n_epochs=opts.n_epochs),
-                # DataLogger(save_path="logs/run3_bee_without_knowing_nest_totalnodes:10.json"),
-                # saver
-            ],
-        )
+    active_callbacks = list(callbacks)
+    active_callbacks.append(logger)
+
+    if opts.print_validation_events:
+        active_callbacks.extend([
+            core.ConsoleLogger(print_train_loss=True, as_json=False),
+            core.PrintValidationEvents(n_epochs=opts.n_epochs)
+        ])
     else:
-        trainer = core.Trainer(
-            game=game,
-            optimizer=optimizer,
-            train_data=train_loader,
-            validation_data=val_loader,
-            device=device,
-            callbacks=callbacks
-            + [core.ConsoleLogger(print_train_loss=True, as_json=True),
-               ]
-        )
+        active_callbacks.append(core.ConsoleLogger(print_train_loss=True, as_json=False))
+
+    trainer = core.Trainer(
+        game=game,
+        optimizer=optimizer,
+        train_data=train_loader,
+        validation_data=val_loader,
+        device=device,
+        callbacks=active_callbacks,
+    )
 
     trainer.train(n_epochs=opts.n_epochs)
     core.close()
@@ -279,15 +237,3 @@ if __name__ == '__main__':
     import sys
 
     main(sys.argv[1:])
-    # import sys, cProfile, pstats
-
-    # profiler = cProfile.Profile()
-    # profiler.enable()
-
-    # main(sys.argv[1:])
-
-    # profiler.disable()
-    # stats = pstats.Stats(profiler)
-    # stats.strip_dirs()                  
-    # stats.sort_stats(pstats.SortKey.TIME) 
-    # stats.print_stats(10) 
