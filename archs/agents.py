@@ -4,13 +4,19 @@ import torch.nn.functional as F
 from archs.arch import RGCN
 from helpers import strip_node_types
 from torch.distributions import Categorical
+from typing import Optional
 import pdb
     
 class BeeSender(nn.Module):
-    def __init__(self, n_features, embedding_dim, hidden_dim, n_relations):
+    def __init__(self, n_features: int, embedding_dim: int, hidden_dim: int, n_relations: int):
         super().__init__()
-        self.encoder = RGCN(n_features, embedding_dim, n_relations, hidden_channels=hidden_dim)
-        self.fc      = nn.Linear(2 * embedding_dim, hidden_dim)
+        self.encoder = RGCN(
+            num_node_features=n_features,
+            hidden_channels=hidden_dim,
+            out_channels=embedding_dim,
+            num_relations=n_relations
+        )
+        self.fc = nn.Linear(2 * embedding_dim, hidden_dim)
 
     def forward(self, x, aux_input):
         data, nest, food = aux_input["data"], aux_input["nest_tensor"], aux_input["food_tensor"]
@@ -19,9 +25,15 @@ class BeeSender(nn.Module):
         return h 
 
 class BeeReceiver(nn.Module):
-    def __init__(self, n_features, embedding_dim, hidden_dim, n_relations, keep_dims=()):
+    def __init__(self, n_features: int, embedding_dim: int, hidden_dim: int, n_relations: int,
+                keep_dims: tuple = (), gnn_num_bases: Optional[int] = None):
         super().__init__()
-        self.encoder   = RGCN(n_features, embedding_dim, n_relations, hidden_channels=hidden_dim)
+        self.encoder   = RGCN(num_node_features=n_features,
+            hidden_channels=hidden_dim,
+            out_channels=embedding_dim,
+            num_relations=n_relations,
+            num_bases=gnn_num_bases
+            )
         self.merge     = nn.Linear(hidden_dim, embedding_dim)
         self.keep_dims = keep_dims
     
@@ -42,9 +54,14 @@ class BeeReceiver(nn.Module):
         return F.log_softmax(logits, -1)
 
 class HumanSender(nn.Module):
-    def __init__(self, node_feat_dim, embed_dim, hidden_size, num_rel):
+    def __init__(self, node_feat_dim: int, embed_dim: int, hidden_size: int, num_rel: int,
+                 gnn_num_bases: Optional[int] = None):
         super().__init__()
-        self.encoder = RGCN(node_feat_dim, embed_dim, num_rel)
+        self.encoder = RGCN(num_node_features=node_feat_dim,
+            hidden_channels=hidden_size,
+            out_channels=embed_dim,
+            num_relations=num_rel,
+            num_bases=gnn_num_bases)
         self.fc  = nn.Linear(2 * embed_dim, hidden_size)
 
     def forward(self, x, aux_input):
@@ -60,17 +77,15 @@ class HumanSender(nn.Module):
         return h0
 
 class HumanReceiver(nn.Module):
-    def __init__(
-        self,
-        node_feat_dim,
-        embed_dim,
-        hidden_size,
-        num_rel,
-        keep_dims=(),
-    ):
+    def __init__(self, node_feat_dim: int, embed_dim: int, hidden_size: int, num_rel: int,
+                 keep_dims: tuple = (), gnn_num_bases: Optional[int] = None):
         super().__init__()
         self.keep_dims = keep_dims
-        self.encoder = RGCN(node_feat_dim, embed_dim, num_rel)
+        self.encoder = RGCN(num_node_features=node_feat_dim,
+            hidden_channels=hidden_size,
+            out_channels=embed_dim,
+            num_relations=num_rel,
+            num_bases=gnn_num_bases)
         self.message_fc = nn.Linear(hidden_size, embed_dim)
 
     @staticmethod

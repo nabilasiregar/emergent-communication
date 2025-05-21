@@ -288,18 +288,18 @@ def main(params):
     game.to(device)
     perform_training(opts, train_loader, val_loader, game, callbacks, device)
 if __name__ == '__main__':
-    # import sys
-
-    # main(sys.argv[1:])
-    import sys, cProfile, pstats
-
-    profiler = cProfile.Profile()
-    profiler.enable()
+    import sys
 
     main(sys.argv[1:])
+    # import sys, cProfile, pstats
 
-    profiler.disable()
-    stats = pstats.Stats(profiler)
-    stats.strip_dirs()                  
-    stats.sort_stats(pstats.SortKey.TIME) 
-    stats.print_stats(10) 
+    # profiler = cProfile.Profile()
+    # profiler.enable()
+
+    # main(sys.argv[1:])
+
+    # profiler.disable()
+    # stats = pstats.Stats(profiler)
+    # stats.strip_dirs()                  
+    # stats.sort_stats(pstats.SortKey.TIME) 
+    # stats.print_stats(10) 
