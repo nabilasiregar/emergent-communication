@@ -1,13 +1,11 @@
 import argparse
-import random
-import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import egg.core as core
 from archs.agents import HumanSender, HumanReceiver, BeeSender, BeeReceiver
 from wrappers.wrapper import MixedSymbolReceiverWrapper, MixedSymbolSenderWrapper
-from helpers import collate_fn
+from helpers import collate_fn, set_seed
 from analysis.callbacks import DataLogger
 
 import pdb
@@ -95,16 +93,6 @@ def get_params(params):
     args.num_relations = 8 # because we discretized direction to 8 classes
 
     return args
-
-def set_seed(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-
 
 def loss(_sender_input, _message, _receiver_input, receiver_output, labels, _aux_input):
     """
