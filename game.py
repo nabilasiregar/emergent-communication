@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import egg.core as core
 from archs.agents import HumanSender, HumanReceiver, BeeSender, BeeReceiver
-from wrappers.wrapper import BeeGSWrapper
+from wrappers.wrapper import MixedSymbolReceiverWrapper, MixedSymbolSenderWrapper
 from helpers import collate_fn
 from analysis.callbacks import DataLogger
 
@@ -78,12 +78,6 @@ def get_params(params):
         default=32,
         help="Output dimensionality of the layer that embeds the message symbols for Receiver (default: 128)",
     )
-    parser.add_argument(
-        "--distance_bins",
-        type=int,
-        default=10,
-        help="Number of bins to discretize continuous distances for the RGCNConv",
-    )
     # arguments controlling the script output
     parser.add_argument(
         "--print_validation_events",
@@ -131,22 +125,18 @@ def loss_nll(_sender_input, _message, _receiver_input, receiver_output, labels, 
 def get_game(opts):
     keep_dims = [0] # receiver does not get node‑type one‑hots apart from nest node
     if opts.communication_type == "bee":
-        vocab_size = opts.num_relations
-        max_len = 2
-
         sender = BeeSender(
             opts.num_node_features,
             opts.sender_embedding,
             opts.sender_hidden,
-            opts.num_relations,
-            opts.distance_bins
+            opts.num_relations
         )
 
         receiver = BeeReceiver(
             opts.num_node_features,
             opts.receiver_embedding,
+            opts.receiver_hidden,
             opts.num_relations,
-            opts.distance_bins,
             keep_dims=keep_dims
         )
     else:
@@ -154,8 +144,7 @@ def get_game(opts):
             node_feat_dim = opts.num_node_features,
             embed_dim     = opts.sender_embedding,
             hidden_size   = opts.sender_hidden,
-            num_rel       = opts.num_relations,
-            num_distance_bins = opts.distance_bins
+            num_rel       = opts.num_relations
     )
 
         receiver = HumanReceiver(
@@ -163,18 +152,21 @@ def get_game(opts):
             embed_dim     = opts.receiver_embedding,
             hidden_size   = opts.receiver_hidden,
             num_rel       = opts.num_relations,
-            num_distance_bins = opts.distance_bins,
             keep_dims=keep_dims
         )
 
     if opts.mode.lower() == "gs":
         if opts.communication_type == "bee":
-            sender = BeeGSWrapper(sender,
-                                  hidden_size=opts.sender_hidden,
-                                  max_len=opts.max_len, 
-                                  vocab_size=opts.vocab_size, 
-                                  temperature=opts.temperature, 
-                                  straight_through = False)
+            vocab_size = opts.num_relations
+            sender = MixedSymbolSenderWrapper(sender,
+                                hidden_size=opts.sender_hidden,
+                                vocab_size=vocab_size,
+                                temperature=opts.temperature,
+                                straight_through = False)
+            receiver = MixedSymbolReceiverWrapper(receiver,
+                                vocab_size=vocab_size,
+                                agent_input_size=opts.receiver_hidden
+        )
             
             game = core.SymbolGameGS(sender, receiver, loss_nll)
         else:
@@ -237,9 +229,9 @@ def get_game(opts):
     return game, callbacks
 
 
-def perform_training(opts, train_loader, val_loader, game, callbacks):
+def perform_training(opts, train_loader, val_loader, game, callbacks, device):
     optimizer = core.build_optimizer(game.parameters())
-
+    
     saver = core.InteractionSaver(
         train_epochs=[],
         test_epochs=[opts.n_epochs],
@@ -252,6 +244,7 @@ def perform_training(opts, train_loader, val_loader, game, callbacks):
             optimizer=optimizer,
             train_data=train_loader,
             validation_data=val_loader,
+             device=device,
             callbacks=callbacks
             + [
                 core.ConsoleLogger(print_train_loss=True, as_json=True),
@@ -266,6 +259,7 @@ def perform_training(opts, train_loader, val_loader, game, callbacks):
             optimizer=optimizer,
             train_data=train_loader,
             validation_data=val_loader,
+            device=device,
             callbacks=callbacks
             + [core.ConsoleLogger(print_train_loss=True, as_json=True),
                ]
@@ -275,6 +269,7 @@ def perform_training(opts, train_loader, val_loader, game, callbacks):
     core.close()
 
 def main(params):
+    device = "cpu"
     opts = get_params(params)
     set_seed(opts.seed)
 
@@ -282,16 +277,29 @@ def main(params):
     val_dataset = torch.load(opts.validation_data)
 
     train_loader = DataLoader(
-        train_dataset, batch_size=opts.batch_size, shuffle=True, collate_fn=collate_fn,
-        generator=torch.Generator().manual_seed(opts.seed)
+        train_dataset, batch_size=opts.batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True,
+        persistent_workers=True, num_workers=4, generator=torch.Generator().manual_seed(opts.seed)
     )
     val_loader = DataLoader(
-        val_dataset, batch_size=opts.batch_size, shuffle=False, collate_fn=collate_fn,
-         generator=torch.Generator().manual_seed(opts.seed)
+        val_dataset, batch_size=opts.batch_size, shuffle=False, collate_fn=collate_fn, pin_memory=True,
+        persistent_workers=True, num_workers=4, generator=torch.Generator().manual_seed(opts.seed)
     )
     game, callbacks = get_game(opts)
-    perform_training(opts, train_loader, val_loader, game, callbacks)
+    game.to(device)
+    perform_training(opts, train_loader, val_loader, game, callbacks, device)
 if __name__ == '__main__':
     import sys
 
     main(sys.argv[1:])
+    # import sys, cProfile, pstats
+
+    # profiler = cProfile.Profile()
+    # profiler.enable()
+
+    # main(sys.argv[1:])
+
+    # profiler.disable()
+    # stats = pstats.Stats(profiler)
+    # stats.strip_dirs()                  
+    # stats.sort_stats(pstats.SortKey.TIME) 
+    # stats.print_stats(10) 
