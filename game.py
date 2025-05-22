@@ -172,7 +172,7 @@ def get_game(opts):
                 hidden_size=opts.receiver_hidden,
                 cell=opts.receiver_cell
             )
-            game = core.SenderReceiverRnnGS(sender, receiver, loss_nll, length_cost=-0.1)
+            game = core.SenderReceiverRnnGS(sender, receiver, loss_nll)
             
         callbacks = []
     return game, callbacks
@@ -180,7 +180,7 @@ def get_game(opts):
 
 def perform_training(opts, train_loader, val_loader, game, callbacks, device):
     optimizer = core.build_optimizer(game.parameters())
-    experiment_name = f"baseline_{opts.communication_type}_{opts.mode}_seed{opts.seed}"
+    experiment_name = f"{opts.communication_type}_{opts.mode}_seed{opts.seed}"
     logger = ResultsCollector(
         log_dir="logs",
         experiment_name=experiment_name,
