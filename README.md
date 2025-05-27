@@ -87,6 +87,6 @@ Example:
 ```
 python -m game --communication_type bee --mode gs --train_data data/samples:10_000_train_data_totalnodes:10.pt --validation_data data/samples:10_000_test_data_totalnodes:10.pt --temperature 1.5 --n_epochs 100
 
-python -m game --communication_type human --mode gs --train_data data/samples:10_000_train_data_totalnodes:10.pt --validation_data data/samples:10_000_test_data_totalnodes:10.pt --max_len 10 --vocab_size 20 --temperature 1.5 --lr 0.0001 --n_epochs 50
+python -m game --communication_type human --mode gs --train_data data/samples:10_000_train_data_totalnodes:10.pt --validation_data data/samples:10_000_test_data_totalnodes:10.pt --max_len 10 --vocab_size 4 --temperature 1.5 --lr 0.0001 --n_epochs 50
 ```
 

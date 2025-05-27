@@ -2,6 +2,7 @@ import argparse
 import yaml
 import optuna
 from optuna.pruners import MedianPruner
+from optuna.samplers import TPESampler
 import torch
 import egg.core as core
 from torch.utils.data import DataLoader, random_split
@@ -26,20 +27,35 @@ class AccCB(Callback):
         self.acc = a.mean().item() if torch.is_tensor(a) else float(a)
 
 def objective(trial, dataset, cfg):
-    lr   = trial.suggest_categorical("lr",   cfg["lr_choices"])
-    temp = trial.suggest_categorical("temperature", cfg["temp_choices"])
+    sh = trial.suggest_categorical("sender_hidden",   cfg["hidden_choices"])
+    rh = trial.suggest_categorical("receiver_hidden", cfg["hidden_choices"])
+    se = trial.suggest_categorical("sender_embedding",   cfg["embedding_choices"])
+    re = trial.suggest_categorical("receiver_embedding", cfg["embedding_choices"])
+    vz = trial.suggest_categorical("vocab_size",     cfg["vocab_size_choices"])
+    ml = trial.suggest_categorical("max_len",        cfg["max_len_choices"])
+    sc = trial.suggest_categorical("sender_cell",        cfg["sender_cell_choices"])
+    rc = trial.suggest_categorical("receiver_cell",      cfg["receiver_cell_choices"])
+
 
     cli = []
-    hp = dict(
-        communication_type=cfg.get("communication_type","bee"),
-        seed=cfg["seed"],
-        train_data=cfg["train_data"],
-        mode=cfg.get("mode","gs"),
-        n_epochs=cfg["n_epochs"],
-        batch_size=cfg["batch_size"],
-        lr=lr,
-        temperature=temp
-    )
+    hp = {
+        "communication_type": cfg.get("communication_type", "human"),
+        "seed":               cfg["seed"],
+        "train_data":         cfg["train_data"],
+        "mode":               cfg.get("mode", "gs"),
+        "n_epochs":           cfg["n_epochs"],
+        "batch_size":         cfg["batch_size"],
+        "lr":                 cfg["lr"],
+        "temperature":        cfg["temperature"],
+        "sender_hidden":      sh,
+        "receiver_hidden":    rh,
+        "sender_embedding":   se,
+        "receiver_embedding": re,
+        "vocab_size":         vz,
+        "max_len":            ml,
+        "sender_cell":        sc,
+        "receiver_cell":      rc,
+    }
     for k,v in hp.items():
         cli += [f"--{k}", str(v)]
 
@@ -86,11 +102,11 @@ def main():
     args = get_args()
     cfg  = yaml.safe_load(open(args.config))
     dataset = torch.load(cfg["train_data"])
-    pruner = MedianPruner(n_warmup_steps=5)  # don’t prune the first 5 steps
-
-    study = optuna.create_study(direction="maximize", pruner=pruner)
+    pruner = MedianPruner(n_warmup_steps=3)
+    sampler = TPESampler(multivariate=True)
+    study = optuna.create_study(direction="maximize", pruner=pruner, sampler=sampler)
     study.optimize(lambda t: objective(t, dataset, cfg),
-                   n_trials=cfg.get("n_trials", 20))
+                   n_trials=cfg.get("n_trials", 30))
 
     print("== Best Hyperparameters ==")
     print(f"  lr          = {study.best_params['lr']}")
