@@ -100,7 +100,6 @@ class ResultsCollector(core.Callback):
                               mode: str) -> Dict[str, Any]:
         """Extract detailed data from one batch interaction."""
         msgs = self._to_list_if_tensor(interaction.message)
-        pdb.set_trace()
         lbls = self._to_list_if_tensor(interaction.labels)
         recv_out = None
         if interaction.receiver_output is not None:
