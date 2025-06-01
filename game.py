@@ -6,7 +6,15 @@ import egg.core as core
 from archs.agents import HumanSender, HumanReceiver, BeeSender, BeeReceiver
 from wrappers.wrapper import MixedSymbolReceiverWrapper, MixedSymbolSenderWrapper
 from helpers import collate_fn, set_seed
-from analysis.logger import ResultsCollector
+from egg.core import Trainer, build_optimizer
+from egg.core.callbacks import (
+    ConsoleLogger,
+    InteractionSaver,
+    TemperatureUpdater
+)
+from egg.core.language_analysis import (
+    PrintValidationEvents
+)
 import pdb
 def get_params(params):
     parser = argparse.ArgumentParser()
@@ -181,26 +189,20 @@ def get_game(opts):
 def perform_training(opts, train_loader, val_loader, game, callbacks, device):
     optimizer = core.build_optimizer(game.parameters())
     experiment_name = f"{opts.communication_type}_{opts.mode}_seed{opts.seed}"
-    logger = ResultsCollector(
-        log_dir="logs",
-        experiment_name=experiment_name,
-        log_epoch_summary=True,
-        log_val_interactions=True, 
-        val_interaction_epoch_freq=1,
-        log_train_interactions=False,
-        train_interaction_epoch_freq=10
-    )
 
-    active_callbacks = list(callbacks)
-    active_callbacks.append(logger)
+    callbacks = [
+        ConsoleLogger(print_train_loss=True, as_json=True),
+        InteractionSaver(
+            train_epochs=list(range(1, opts.n_epochs + 1)),
+            test_epochs=list(range(1, opts.n_epochs + 1)),
+            checkpoint_dir=f"logs/interactions/{experiment_name}",
+            aggregated_interaction=False
+        ),
+        # TemperatureUpdater(agent=game.sender, decay=0.9, minimum=0.1)
+    ]
 
     if opts.print_validation_events:
-        active_callbacks.extend([
-            core.ConsoleLogger(print_train_loss=True, as_json=False),
-            core.PrintValidationEvents(n_epochs=opts.n_epochs)
-        ])
-    else:
-        active_callbacks.append(core.ConsoleLogger(print_train_loss=True, as_json=False))
+        callbacks.append(PrintValidationEvents(opts.n_epochs))
 
     trainer = core.Trainer(
         game=game,
@@ -208,7 +210,7 @@ def perform_training(opts, train_loader, val_loader, game, callbacks, device):
         train_data=train_loader,
         validation_data=val_loader,
         device=device,
-        callbacks=active_callbacks,
+        callbacks=callbacks
     )
 
     trainer.train(n_epochs=opts.n_epochs)

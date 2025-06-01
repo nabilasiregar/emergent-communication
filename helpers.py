@@ -5,26 +5,34 @@ from torch_geometric.data import Batch
 import pdb
 
 def collate_fn(batch):
-    data_list = [sample[0] for sample in batch]
-    batch_data = Batch.from_data_list(data_list)
-
-    nest_tensor = torch.tensor([
-        batch_data.ptr[i] + sample[1] for i, sample in enumerate(batch)
-    ], dtype=torch.long)
-
-    food_tensor = torch.tensor([
-        batch_data.ptr[i] + sample[2] for i, sample in enumerate(batch)
-    ], dtype=torch.long)
-
-    labels = torch.tensor([sample[2] for sample in batch], dtype=torch.long)
-    sender_input = torch.zeros(len(batch), dtype=torch.long)
+    datas, nests, foods = zip(*batch)
+    
+    batch_data = Batch.from_data_list(datas)
+    
+    nest_tensor = torch.tensor(
+        [batch_data.ptr[i] + nests[i] for i in range(len(nests))],
+        dtype=torch.long
+    )
+    food_tensor = torch.tensor(
+        [batch_data.ptr[i] + foods[i] for i in range(len(foods))],
+        dtype=torch.long
+    )
+    labels  = torch.tensor(foods, dtype=torch.long)
+    sender_input   = batch_data.x
     receiver_input = None
-   
+
+    all_pos = batch_data.pos
+    nest_pos = all_pos[nest_tensor]
+    food_pos = all_pos[food_tensor] 
+
     aux_input = {
-        'data': batch_data,
-        'nest_tensor': nest_tensor,
-        'food_tensor': food_tensor
+        "data": batch_data,
+        "nest_tensor": nest_tensor,
+        "food_tensor": food_tensor,
+        "nest_pos": nest_pos,
+        "food_pos": food_pos
     }
+   
     return sender_input, labels, receiver_input, aux_input
 
 def strip_node_types(x, keep_dims):

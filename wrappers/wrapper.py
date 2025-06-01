@@ -1,6 +1,5 @@
 """Custom two‑token (discrete a, continuous b) wrappers for an EGG
-SymbolGame.  They mimic the API and naming style of GumbelSoftmaxWrapper 
-and SymbolReceiverWrapper.
+SymbolGame.  The sampling of discrete token mimics GumbelSoftmaxWrapper.
 """
 from typing import Optional
 
@@ -50,10 +49,16 @@ class MixedSymbolSenderWrapper(nn.Module):
             self.logits_a(h), self.temperature, self.training, self.straight_through
         )
 
-        mu = self.mu_head(h)
-        logvar = self.logvar_head(h)
-        eps = torch.randn_like(mu)
-        token_b = mu + eps * torch.exp(0.5 * logvar)
+
+        mu_log     = self.mu_head(h)
+        logvar_log = self.logvar_head(h)
+        epsilon        = torch.randn_like(mu_log)
+        sigma_log  = torch.exp(0.5 * logvar_log)  
+        # distance is log‐normally distributed (non-negative)
+        # it should learns some continuous scalar that grows as the true distance grows
+        sampled_log_distance = mu_log + epsilon * sigma_log
+        token_b = sampled_log_distance.exp()
+
 
         message = torch.cat([onehot_a, token_b], dim=-1)
         return message
@@ -64,7 +69,7 @@ class MixedSymbolReceiverWrapper(nn.Module):
 
     Splits the incoming message into the one‑hot part (embedded by
     RelaxedEmbedding) and the continuous scalar (passed through a
-    tiny linear layer).  The two vectors are summed before feeding the
+    linear layer).  The two vectors are summed before feeding the
     wrapped agent.
     """
 

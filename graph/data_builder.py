@@ -45,7 +45,10 @@ class DataConverter:
         else:
             edge_attr = torch.empty((0, 2), dtype=torch.float)
         
-        return Data(x=x, edge_index=edge_index, edge_attr=edge_attr)
+        coords = [env.directed_graph.nodes[n]["position"] for n in nodes]
+        pos = torch.tensor(coords, dtype=torch.float)
+        
+        return Data(x=x, edge_index=edge_index, edge_attr=edge_attr, pos=pos)
 
 def get_nest_and_food_indices(data: Data) -> (int, int):
     """
