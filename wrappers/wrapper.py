@@ -51,13 +51,13 @@ class MixedSymbolSenderWrapper(nn.Module):
 
 
         mu_log     = self.mu_head(h)
-        logvar_log = self.logvar_head(h)
+        logvar_log = torch.tanh(self.logvar_head(h))
         epsilon        = torch.randn_like(mu_log)
         sigma_log  = torch.exp(0.5 * logvar_log)  
         # distance is log‐normally distributed (non-negative)
         # it should learns some continuous scalar that grows as the true distance grows
         sampled_log_distance = mu_log + epsilon * sigma_log
-        token_b = sampled_log_distance.exp()
+        token_b = sampled_log_distance
 
 
         message = torch.cat([onehot_a, token_b], dim=-1)

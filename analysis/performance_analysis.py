@@ -32,7 +32,7 @@ def plot_accuracies_over_epochs(
     if not train_stats.empty:
         epochs_train = train_stats["epoch"].to_numpy()
         mean_train = train_stats["mean"].to_numpy()
-        std_train = train_stats["std"].to_numpy()
+        std_train = train_stats["std"].fillna(0).to_numpy() 
         plt.plot(
             epochs_train,
             mean_train,
@@ -142,14 +142,14 @@ def plot_losses_over_epochs(
 
 if __name__ == "__main__":
     csv_list = [
-        "results/human_gs_seed42.csv",
-        "results/human_gs_seed123.csv",
-        "results/human_gs_seed2025.csv"
+        "logs/csv/2025-06-11/bee_gs_seed42_without_tanh.csv",
+        "logs/csv/2025-06-11/bee_gs_seed123_without_tanh.csv",
+        "logs/csv/2025-06-11/bee_gs_seed2025_without_tanh.csv"
     ]
 
     plot_accuracies_over_epochs(
         csv_files=csv_list,
-        title="Mean Accuracy Over Epochs Across Different Seeds in Human"
+        title="Mean Accuracy"
     )
 
-    plot_losses_over_epochs(csv_files=csv_list, title="Mean Losses Over Epochs Across Different Seeds in Human")
+    plot_losses_over_epochs(csv_files=csv_list, title="Mean Loss")
