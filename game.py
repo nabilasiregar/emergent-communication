@@ -1,4 +1,5 @@
 import argparse
+from datetime import datetime
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
@@ -6,6 +7,7 @@ import egg.core as core
 from archs.agents import HumanSender, HumanReceiver, BeeSender, BeeReceiver
 from wrappers.wrapper import MixedSymbolReceiverWrapper, MixedSymbolSenderWrapper
 from helpers import collate_fn, set_seed
+from analysis.logger import CsvLogger
 from egg.core import Trainer, build_optimizer
 from egg.core.callbacks import (
     ConsoleLogger,
@@ -90,6 +92,9 @@ def get_params(params):
         help="If this flag is passed, at the end of training the script prints the input validation data, the corresponding messages produced by the Sender, and the output probabilities produced by the Receiver (default: do not print)",
     )
     args = core.init(parser, params)
+
+    if args.communication_type == "bee":
+        args.grad_norm = 1.0 # to solve the explosive gradient problem
 
     # automatically get num of node features
     train_dataset = torch.load(args.train_data)
@@ -188,16 +193,18 @@ def get_game(opts):
 
 def perform_training(opts, train_loader, val_loader, game, callbacks, device):
     optimizer = core.build_optimizer(game.parameters())
-    experiment_name = f"{opts.communication_type}_{opts.mode}_seed{opts.seed}"
+    experiment_name = f"{opts.communication_type}_{opts.mode}_seed{opts.seed}_without_tanh"
+    timestamp_str = datetime.now().strftime("%Y-%m-%d") 
 
     callbacks = [
         ConsoleLogger(print_train_loss=True, as_json=True),
         InteractionSaver(
             train_epochs=list(range(1, opts.n_epochs + 1)),
             test_epochs=list(range(1, opts.n_epochs + 1)),
-            checkpoint_dir=f"logs/interactions/{experiment_name}",
+            checkpoint_dir=f"logs/interactions/{timestamp_str}/{experiment_name}",
             aggregated_interaction=False
         ),
+        CsvLogger(log_dir=f"logs/csv/{timestamp_str}", filename=experiment_name)
         # TemperatureUpdater(agent=game.sender, decay=0.9, minimum=0.1)
     ]
 
