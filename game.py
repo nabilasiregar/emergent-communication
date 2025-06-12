@@ -155,17 +155,15 @@ def get_game(opts):
 
     if opts.mode.lower() == "gs":
         if opts.communication_type == "bee":
-            vocab_size = opts.num_relations
             sender = MixedSymbolSenderWrapper(sender,
                                 hidden_size=opts.sender_hidden,
-                                vocab_size=vocab_size,
+                                vocab_size=opts.vocab_size,
                                 temperature=opts.temperature,
                                 straight_through = False)
             receiver = MixedSymbolReceiverWrapper(receiver,
-                                vocab_size=vocab_size,
+                                vocab_size=opts.vocab_size,
                                 agent_input_size=opts.receiver_hidden
         )
-            
             game = core.SymbolGameGS(sender, receiver, loss_nll)
         else:
             sender = core.RnnSenderGS(
