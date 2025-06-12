@@ -5,6 +5,7 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from egg.core.gs_wrappers import gumbel_softmax_sample, RelaxedEmbedding
 import pdb
@@ -57,8 +58,7 @@ class MixedSymbolSenderWrapper(nn.Module):
         # distance is log‐normally distributed (non-negative)
         # it should learns some continuous scalar that grows as the true distance grows
         sampled_log_distance = mu_log + epsilon * sigma_log
-        token_b = sampled_log_distance
-
+        token_b =  F.softplus(sampled_log_distance)
 
         message = torch.cat([onehot_a, token_b], dim=-1)
         return message

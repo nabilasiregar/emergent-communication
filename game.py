@@ -193,7 +193,7 @@ def get_game(opts):
 
 def perform_training(opts, train_loader, val_loader, game, callbacks, device):
     optimizer = core.build_optimizer(game.parameters())
-    experiment_name = f"{opts.communication_type}_{opts.mode}_seed{opts.seed}_without_tanh"
+    experiment_name = f"{opts.communication_type}_{opts.mode}_seed{opts.seed}"
     timestamp_str = datetime.now().strftime("%Y-%m-%d") 
 
     callbacks = [
