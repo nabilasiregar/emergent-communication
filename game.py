@@ -23,7 +23,6 @@ def get_params(params):
     parser.add_argument("--communication_type", choices=["bee", "human"], default="bee")
 
     # arguments concerning the input data and how they are processed
-    parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument(
         "--train_data", type=str, default="data/train_data.pt", help="Path to the train data"
     )
@@ -193,7 +192,7 @@ def get_game(opts):
 
 def perform_training(opts, train_loader, val_loader, game, callbacks, device):
     optimizer = core.build_optimizer(game.parameters())
-    experiment_name = f"{opts.communication_type}_{opts.mode}_seed{opts.seed}"
+    experiment_name = f"{opts.communication_type}_{opts.mode}_seed{opts.random_seed}"
     timestamp_str = datetime.now().strftime("%Y-%m-%d") 
 
     callbacks = [
@@ -226,18 +225,18 @@ def perform_training(opts, train_loader, val_loader, game, callbacks, device):
 def main(params):
     device = "cpu"
     opts = get_params(params)
-    set_seed(opts.seed)
+    set_seed(opts.random_seed)
 
     train_dataset = torch.load(opts.train_data)
     val_dataset = torch.load(opts.validation_data)
 
     train_loader = DataLoader(
         train_dataset, batch_size=opts.batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True,
-        persistent_workers=True, num_workers=4, generator=torch.Generator().manual_seed(opts.seed)
+        persistent_workers=True, num_workers=4, generator=torch.Generator().manual_seed(opts.random_seed)
     )
     val_loader = DataLoader(
         val_dataset, batch_size=opts.batch_size, shuffle=False, collate_fn=collate_fn, pin_memory=True,
-        persistent_workers=True, num_workers=4, generator=torch.Generator().manual_seed(opts.seed)
+        persistent_workers=True, num_workers=4, generator=torch.Generator().manual_seed(opts.random_seed)
     )
     game, callbacks = get_game(opts)
     game.to(device)
