@@ -142,14 +142,14 @@ def plot_losses_over_epochs(
 
 if __name__ == "__main__":
     csv_list = [
-        "logs/csv/2025-06-11/bee_gs_seed42_without_tanh.csv",
-        "logs/csv/2025-06-11/bee_gs_seed123_without_tanh.csv",
-        "logs/csv/2025-06-11/bee_gs_seed2025_without_tanh.csv"
+        "logs/csv/2025-06-12/bee_gs_seed42_lr0.001.csv",
+        "logs/csv/2025-06-12/bee_gs_seed123_lr0.001.csv",
+        # "logs/csv/2025-06-12/bee_gs_seed2025.csv"
     ]
 
     plot_accuracies_over_epochs(
         csv_files=csv_list,
-        title="Mean Accuracy"
+        title="Mean Accuracy Over Epochs in Bee with Lr 0.001"
     )
 
-    plot_losses_over_epochs(csv_files=csv_list, title="Mean Loss")
+    plot_losses_over_epochs(csv_files=csv_list, title="Mean Loss Over Epochs in Bee with Lr 0.001")
