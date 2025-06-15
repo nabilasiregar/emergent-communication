@@ -7,7 +7,6 @@ num_workers: 4
 lr: 0.001
 temperature: 2.5
 
-# Optuna:
 n_trials: 30
 hidden_choices: [32, 64, 128, 256]
 embedding_choices: [32, 64, 128]
@@ -16,6 +15,5 @@ vocab_size_choices: [20, 50, 100]
 sender_cell_choices: ["rnn", "gru", "lstm"]
 receiver_cell_choices: ["rnn", "gru", "lstm"]
 
-# game_module params:
 mode: "gs"
 communication_type: "human"

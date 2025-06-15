@@ -1,0 +1,18 @@
+communication_type: 'human'
+mode: 'gs'
+n_epochs: 100
+batch_size: 32
+train_data: 'data/samples:10_000_train_data_totalnodes:10.pt'
+validation_data: 'data/samples:10_000_test_data_totalnodes:10.pt'
+
+sender_cell: 'gru'
+receiver_cell: 'gru'
+sender_hidden: 128
+receiver_hidden: 128
+sender_embedding: 64
+receiver_embedding: 64
+vocab_size: 100
+max_len: 10
+
+optimizer: 'adam'
+lr: 0.001

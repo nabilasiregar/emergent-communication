@@ -1,0 +1,14 @@
+communication_type: 'bee'
+mode: 'gs'
+n_epochs: 40
+batch_size: 32
+train_data: 'data/samples:10_000_train_data_totalnodes:10.pt'
+validation_data: 'data/samples:10_000_test_data_totalnodes:10.pt'
+
+sender_hidden: 32
+receiver_hidden: 32
+sender_embedding: 32
+receiver_embedding: 32
+
+optimizer: 'adam'
+lr: 0.005

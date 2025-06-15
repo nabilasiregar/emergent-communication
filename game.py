@@ -6,7 +6,8 @@ from torch.utils.data import DataLoader
 from torch.utils.data import random_split
 import egg.core as core
 from archs.agents import HumanSender, HumanReceiver, BeeSender, BeeReceiver
-from wrappers.wrapper import MixedSymbolReceiverWrapper, MixedSymbolSenderWrapper
+from utils.wrapper import MixedSymbolReceiverWrapper, MixedSymbolSenderWrapper
+from utils.early_stopper import EarlyStopperLoss
 from helpers import collate_fn, set_seed
 from analysis.logger import CsvLogger
 from egg.core import Trainer, build_optimizer
@@ -209,8 +210,14 @@ def perform_training(opts, train_loader, val_loader, game, callbacks, device, ex
             checkpoint_dir=f"logs/interactions/{timestamp_str}/{experiment_name}",
             aggregated_interaction=False
         ),
-        CsvLogger(log_dir=f"logs/csv/{timestamp_str}", filename=experiment_name)
-        # TemperatureUpdater(agent=game.sender, decay=0.9, minimum=0.1)
+        CsvLogger(log_dir=f"logs/csv/{timestamp_str}", filename=experiment_name),
+        TemperatureUpdater(agent=game.sender, decay=0.9, minimum=0.5),
+        EarlyStopperLoss(
+        patience=10,
+        min_delta=0.0,
+        validation=True,
+        verbose=True
+    )
     ]
 
     if opts.print_validation_events:
@@ -234,7 +241,7 @@ def main(params, experiment_name=None):
     set_seed(opts.random_seed)
 
     if experiment_name is None:
-        experiment_name = f"{opts.communication_type}_{opts.mode}_seed{opts.random_seed}"
+        experiment_name = f"with_earlystop_{opts.communication_type}_{opts.mode}_seed{opts.random_seed}_hidden{opts.sender_hidden}_temp{opts.temperature}"
     
     train_dataset = torch.load(opts.train_data)
 
