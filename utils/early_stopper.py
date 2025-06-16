@@ -42,8 +42,9 @@ class EarlyStopperLoss(EarlyStopper):
 
         if self.wait >= self.patience:
             if self.verbose:
+                epoch_num = len(self.validation_stats)
                 print(
-                    f"[EarlyStopperLoss] stopping at epoch {self.epoch}: "
+                    f"[EarlyStopperLoss] stopping at epoch {epoch_num}: "
                     f"val_loss did not improve by >{self.min_delta} for {self.patience} epochs "
                     f"(best={self.best_loss:.4f}, last={current_loss:.4f})"
                 )
