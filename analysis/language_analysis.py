@@ -96,3 +96,5 @@ def load_all_interactions(
             loaded_interactions.append(torch.load(file_path))
 
     return loaded_interactions
+
+
