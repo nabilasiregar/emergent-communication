@@ -6,4 +6,4 @@ pyyaml
 networkx
 matplotlib
 pandas
-
+python-Levenshtein
