@@ -27,10 +27,11 @@ change line 209
 ```
 to
 ```
-try:
-    aux_input[k] = _check_cat([x.aux_input[k] for x in interactions])
-except Exception as e:
-    aux_input[k] = None
+values = [x.aux_input[k] for x in interactions]
+                try:
+                    aux_input[k] = _check_cat(values)
+                except Exception:
+                    aux_input[k] = values
 ```
 
 After making the changes, reinstall EGG to reflect the modifications:
@@ -66,27 +67,13 @@ Example:
 python -m graph.dataset --num_samples 10000 --num_nodes 10 --train_ratio 0.8 --train_output data/samples:10_000_train_data_totalnodes:10.pt --test_output data/samples:10_000_test_data_totalnodes:10.pt
 ```
 
-## Vocab size
-### Bee-like
-vocab_size = 1 + 8 + 10  # 1 for EOS, 8 directions, 10 distance bins
-max_len = 2 # distance + direction
-### Human-like
-vocab_size = 50  # 8 directions, 10 distance words, 5 verbs, etc.
-max_len = 10
-
-## Experiment
-### Logging data
-Add
-```
-DataLogger(save_path="logs/experiment.json")
-```
-in callbacks
-
-### Running game
+## Running the game
+For experimentation and fine-tuning, do not pass `--final_run` flag to the arguments. This will set aside a portion of the training data to create a validation set, and the test data will remain unused.
+For the final run, include the `--final_run` flag to evaluate the model on the test set.
 Example:
 ```
-python -m game --communication_type bee --mode gs --train_data data/samples:10_000_train_data_totalnodes:10.pt --validation_data data/samples:10_000_test_data_totalnodes:10.pt --temperature 2.5 --lr 0.005 --sender_hidden 64 --receiver_hidden 64  --sender_embedding 32 --receiver_embedding 32 --n_epochs 100
+python -m game --communication_type bee --mode gs --train_data data/samples:10_000_train_data_totalnodes:10.pt --validation_data data/samples:10_000_test_data_totalnodes:10.pt --temperature 2.5 --lr 0.005 --sender_hidden 64 --receiver_hidden 64  --sender_embedding 32 --receiver_embedding 32 --n_epochs 100 --final_run
 
-python -m game --communication_type human --mode gs --train_data data/samples:10_000_train_data_totalnodes:10.pt --validation_data data/samples:10_000_test_data_totalnodes:10.pt --sender_hidden 128 --receiver_hidden 128 --sender_embedding 64 --receiver_embedding 64 --sender_cell 'gru' --receiver_cell 'gru' --vocab_size 100 --temperature 2.5 --lr 0.001 --max_len 10 --n_epochs 100
+python -m game --communication_type human --mode gs --train_data data/samples:10_000_train_data_totalnodes:10.pt --validation_data data/samples:10_000_test_data_totalnodes:10.pt --sender_hidden 128 --receiver_hidden 128 --sender_embedding 64 --receiver_embedding 64 --sender_cell 'gru' --receiver_cell 'gru' --vocab_size 100 --temperature 2.5 --lr 0.001 --max_len 10 --n_epochs 100 --final_run
 ```
 
