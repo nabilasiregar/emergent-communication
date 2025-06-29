@@ -241,7 +241,7 @@ def main(params, experiment_name=None):
     set_seed(opts.random_seed)
 
     if experiment_name is None:
-        experiment_name = f"maxlen{opts.max_len}_{opts.communication_type}_{opts.mode}_seed{opts.random_seed}"
+        experiment_name = f"{opts.communication_type}_{opts.mode}_seed{opts.random_seed}"
     
     train_dataset = torch.load(opts.train_data)
 

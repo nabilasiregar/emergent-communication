@@ -7,3 +7,4 @@ networkx
 matplotlib
 pandas
 python-Levenshtein
+python-louvain

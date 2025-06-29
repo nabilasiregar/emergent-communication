@@ -5,18 +5,10 @@ import yaml
 import game
 import pdb
 
-SEEDS = [42, 123, 2025]
+SEEDS = [123, 2025]
 
 EXPERIMENTS = {
-    "bee_vary_temperature": [
-        {"temp": 0.5},
-        {"temp": 1.0},
-        {"temp": 1.5},
-        {"temp": 2.0},
-        {"temp": 3.0}
-    ],
-    "bee_default_temp": [{1.0}],
-
+    "bee_default": [{}],
     "human_vocab_sweep": [
         {"vocab_size": 20},
         {"vocab_size": 50},
@@ -28,7 +20,7 @@ EXPERIMENTS = {
         {"max_len": 6},
         {"max_len": 10},
     ],
-    "human_default": [{10}],
+    "human_default": [{}],
 }
 
 def load_base_config(path):
@@ -80,12 +72,13 @@ def main():
             current_config = copy.deepcopy(base_config)
             current_config.update(param_variation)
             current_config['random_seed'] = seed
+            current_config['final_run'] = True
             
             # create a descriptive name for logging
             name_parts = [args.name]
             for key, val in param_variation.items():
-                name_parts.append(f"{key}:{val}")
-            name_parts.append(f"seed:{seed}")
+                name_parts.append(f"{key}{val}")
+            name_parts.append(f"seed{seed}")
             
             experiment_name = "_".join(name_parts)
 

@@ -16,3 +16,4 @@ max_len: 10
 
 optimizer: 'adam'
 lr: 0.001
+temperature: 2.5
