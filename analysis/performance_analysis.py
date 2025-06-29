@@ -237,7 +237,7 @@ def plot_accuracy_over_epochs_by_condition(
     all_dfs = []
 
     label_map = {
-        'gamesize10_human_gs': 'maxlen = 10',
+        'maxlen10_human_gs': 'maxlen = 10',
         'maxlen2_human_gs':  'maxlen = 2',
         'maxlen4_human_gs':  'maxlen = 4',
         'maxlen6_human_gs':  'maxlen = 6'
@@ -332,16 +332,27 @@ if __name__ == "__main__":
         # "logs/csv/2025-06-16/gamesize5_human_gs_seed42.csv",
         # "logs/csv/2025-06-16/gamesize5_human_gs_seed123.csv",
         # "logs/csv/2025-06-16/gamesize5_human_gs_seed2025.csv",
-        "logs/csv/2025-06-16/gamesize10_human_gs_seed42.csv",
+        # "logs/csv/2025-06-16/gamesize10_human_gs_seed42.csv",
         # "logs/csv/2025-06-16/gamesize10_human_gs_seed123.csv",
         # "logs/csv/2025-06-16/gamesize10_human_gs_seed2025.csv",
         # "logs/csv/2025-06-16/gamesize20_human_gs_seed42.csv",
         # "logs/csv/2025-06-16/gamesize20_human_gs_seed123.csv",
         # "logs/csv/2025-06-16/gamesize20_human_gs_seed2025.csv",
-        "logs/csv/2025-06-16/maxlen2_human_gs_seed42.csv",
-        "logs/csv/2025-06-16/maxlen4_human_gs_seed42.csv",
-        "logs/csv/2025-06-16/maxlen6_human_gs_seed42.csv"
-
+        # "logs/csv/2025-06-16/maxlen2_human_gs_seed42.csv",
+        # "logs/csv/2025-06-16/maxlen4_human_gs_seed42.csv",
+        # "logs/csv/2025-06-16/maxlen6_human_gs_seed42.csv"
+        "logs/csv/2025-06-22/maxlen2_human_gs_seed42.csv",
+        "logs/csv/2025-06-23/maxlen2_human_gs_seed123.csv",
+        "logs/csv/2025-06-23/maxlen2_human_gs_seed2025.csv",
+        # "logs/csv/2025-06-22/maxlen4_human_gs_seed42.csv",
+        "logs/csv/2025-06-23/maxlen4_human_gs_seed123.csv",
+        "logs/csv/2025-06-23/maxlen4_human_gs_seed2025.csv",
+        "logs/csv/2025-06-22/maxlen6_human_gs_seed42.csv",
+        "logs/csv/2025-06-23/maxlen6_human_gs_seed123.csv",
+        "logs/csv/2025-06-23/maxlen6_human_gs_seed2025.csv",
+        "logs/csv/2025-06-22/maxlen10_human_gs_seed42.csv",
+        "logs/csv/2025-06-23/maxlen10_human_gs_seed123.csv",
+        "logs/csv/2025-06-23/maxlen10_human_gs_seed2025.csv"
     ]
 
     # plot_accuracies_over_epochs(
