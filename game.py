@@ -3,9 +3,11 @@ from datetime import datetime
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
+from torch.utils.data import random_split
 import egg.core as core
 from archs.agents import HumanSender, HumanReceiver, BeeSender, BeeReceiver
-from wrappers.wrapper import MixedSymbolReceiverWrapper, MixedSymbolSenderWrapper
+from utils.wrapper import MixedSymbolReceiverWrapper, MixedSymbolSenderWrapper
+from utils.early_stopper import EarlyStopperLoss
 from helpers import collate_fn, set_seed
 from analysis.logger import CsvLogger
 from egg.core import Trainer, build_optimizer
@@ -23,12 +25,17 @@ def get_params(params):
     parser.add_argument("--communication_type", choices=["bee", "human"], default="bee")
 
     # arguments concerning the input data and how they are processed
-    parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument(
         "--train_data", type=str, default="data/train_data.pt", help="Path to the train data"
     )
     parser.add_argument(
         "--validation_data", type=str, default="data/test_data.pt", help="Path to the validation data"
+    )
+    parser.add_argument(
+        "--final_run",
+        default=False,
+        action="store_true",
+        help="If this flag is passed, use the full training set and the separate validation file. Otherwise, split train into train/val.",
     )
    
     # arguments concerning the training method
@@ -156,17 +163,15 @@ def get_game(opts):
 
     if opts.mode.lower() == "gs":
         if opts.communication_type == "bee":
-            vocab_size = opts.num_relations
             sender = MixedSymbolSenderWrapper(sender,
                                 hidden_size=opts.sender_hidden,
-                                vocab_size=vocab_size,
+                                vocab_size=opts.vocab_size,
                                 temperature=opts.temperature,
                                 straight_through = False)
             receiver = MixedSymbolReceiverWrapper(receiver,
-                                vocab_size=vocab_size,
+                                vocab_size=opts.vocab_size,
                                 agent_input_size=opts.receiver_hidden
         )
-            
             game = core.SymbolGameGS(sender, receiver, loss_nll)
         else:
             sender = core.RnnSenderGS(
@@ -191,11 +196,12 @@ def get_game(opts):
     return game, callbacks
 
 
-def perform_training(opts, train_loader, val_loader, game, callbacks, device):
+def perform_training(opts, train_loader, val_loader, game, callbacks, device, experiment_name):
     optimizer = core.build_optimizer(game.parameters())
-    experiment_name = f"{opts.communication_type}_{opts.mode}_seed{opts.seed}_without_tanh"
-    timestamp_str = datetime.now().strftime("%Y-%m-%d") 
 
+    # for creating a timestamped folder
+    timestamp_str = datetime.now().strftime("%Y-%m-%d") 
+        
     callbacks = [
         ConsoleLogger(print_train_loss=True, as_json=True),
         InteractionSaver(
@@ -204,8 +210,14 @@ def perform_training(opts, train_loader, val_loader, game, callbacks, device):
             checkpoint_dir=f"logs/interactions/{timestamp_str}/{experiment_name}",
             aggregated_interaction=False
         ),
-        CsvLogger(log_dir=f"logs/csv/{timestamp_str}", filename=experiment_name)
-        # TemperatureUpdater(agent=game.sender, decay=0.9, minimum=0.1)
+        CsvLogger(log_dir=f"logs/csv/{timestamp_str}", filename=experiment_name),
+        TemperatureUpdater(agent=game.sender, decay=0.9, minimum=0.5),
+        EarlyStopperLoss(
+        patience=10,
+        min_delta=0.0,
+        validation=True,
+        verbose=True
+    )
     ]
 
     if opts.print_validation_events:
@@ -223,25 +235,51 @@ def perform_training(opts, train_loader, val_loader, game, callbacks, device):
     trainer.train(n_epochs=opts.n_epochs)
     core.close()
 
-def main(params):
+def main(params, experiment_name=None):
     device = "cpu"
     opts = get_params(params)
-    set_seed(opts.seed)
+    set_seed(opts.random_seed)
 
+    if experiment_name is None:
+        experiment_name = f"{opts.communication_type}_{opts.mode}_seed{opts.random_seed}"
+    
     train_dataset = torch.load(opts.train_data)
-    val_dataset = torch.load(opts.validation_data)
 
-    train_loader = DataLoader(
-        train_dataset, batch_size=opts.batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True,
-        persistent_workers=True, num_workers=4, generator=torch.Generator().manual_seed(opts.seed)
-    )
-    val_loader = DataLoader(
-        val_dataset, batch_size=opts.batch_size, shuffle=False, collate_fn=collate_fn, pin_memory=True,
-        persistent_workers=True, num_workers=4, generator=torch.Generator().manual_seed(opts.seed)
-    )
+    if opts.final_run:
+        print("Mode: FULL TRAINING SET + TEST SET")
+        val_dataset = torch.load(opts.validation_data)
+        train_loader = DataLoader(
+            train_dataset, batch_size=opts.batch_size, shuffle=True, collate_fn=collate_fn, pin_memory=True,
+            persistent_workers=True, num_workers=4, generator=torch.Generator().manual_seed(opts.random_seed)
+        )
+        val_loader = DataLoader(
+            val_dataset, batch_size=opts.batch_size, shuffle=False, collate_fn=collate_fn, pin_memory=True,
+            persistent_workers=True, num_workers=4, generator=torch.Generator().manual_seed(opts.random_seed)
+        )
+    else:
+        print("Mode: EXPERIMENT")
+        n_samples = len(train_dataset)
+        train_size = int(0.8 * n_samples)
+        val_size = n_samples - train_size
+        
+        train_subset, val_subset = random_split(
+            train_dataset, [train_size, val_size],
+            generator=torch.Generator().manual_seed(opts.random_seed)
+        )
+
+        train_loader = DataLoader(
+            train_subset, batch_size=opts.batch_size, shuffle=True, collate_fn=collate_fn,
+            pin_memory=True, persistent_workers=True, num_workers=4,
+            generator=torch.Generator().manual_seed(opts.random_seed)
+        )
+        val_loader = DataLoader(
+            val_subset, batch_size=opts.batch_size, shuffle=False, collate_fn=collate_fn,
+            pin_memory=True, persistent_workers=True, num_workers=4,
+            generator=torch.Generator().manual_seed(opts.random_seed)
+        )
     game, callbacks = get_game(opts)
     game.to(device)
-    perform_training(opts, train_loader, val_loader, game, callbacks, device)
+    perform_training(opts, train_loader, val_loader, game, callbacks, device, experiment_name)
 if __name__ == '__main__':
     import sys
 

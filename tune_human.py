@@ -12,7 +12,7 @@ from egg.core import Callback
 
 def get_args():
     p = argparse.ArgumentParser(description="Tune for max accuracy")
-    p.add_argument("--config", type=str, default="config.yaml",
+    p.add_argument("--config", type=str, default="config_tune_human.yaml",
                    help="YAML file")
     args, _ = p.parse_known_args()
     return args

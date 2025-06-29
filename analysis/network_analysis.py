@@ -79,6 +79,7 @@ def analyze_graphs(graphs_data, label):
     print(f"\n=== Statistics for {label} ===")
     print(df.describe())
     print(df.head())
+    return df.describe()
 
 def compute_centrality_measures(graphs_data, label):
     records = []
@@ -108,6 +109,7 @@ def compute_centrality_measures(graphs_data, label):
     df = pd.DataFrame(records)
     print(f"\n=== Centrality stats for {label} ===")
     print(df.describe())
+    return df.describe()
 
 def identify_hub_nodes(graphs_data, label):
     """
@@ -139,15 +141,18 @@ def identify_hub_nodes(graphs_data, label):
 
 if __name__ == "__main__":
     dataset_paths = [
-        "data/samples:10_000_train_data_totalnodes:5.pt",
-        "data/samples:10_000_train_data_totalnodes:10.pt",
-        "data/samples:10_000_train_data_totalnodes:20.pt"
+        "data/samples:10_000_test_data_totalnodes:5.pt",
+        "data/samples:10_000_test_data_totalnodes:10.pt",
+        "data/samples:10_000_test_data_totalnodes:20.pt"
     ]
 
     for path in dataset_paths:
-        label = path.split("/")[-1]
+        label = path.split("/")[-1].replace(":", "_").replace(".pt", "")
         graphs_data = build_graph(path)
 
-        analyze_graphs(graphs_data, label)
-        compute_centrality_measures(graphs_data, label)
+        stats_df = analyze_graphs(graphs_data, label)
+        centrality_df = compute_centrality_measures(graphs_data, label)
         identify_hub_nodes(graphs_data, label)
+
+        stats_df.to_csv(f"results/statistics_{label}.csv", index=False)
+        centrality_df.to_csv(f"results/centrality_{label}.csv", index=False)

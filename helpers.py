@@ -21,16 +21,12 @@ def collate_fn(batch):
     sender_input   = batch_data.x
     receiver_input = None
 
-    all_pos = batch_data.pos
-    nest_pos = all_pos[nest_tensor]
-    food_pos = all_pos[food_tensor] 
-
     aux_input = {
         "data": batch_data,
         "nest_tensor": nest_tensor,
         "food_tensor": food_tensor,
-        "nest_pos": nest_pos,
-        "food_pos": food_pos
+        "nest_idx": torch.tensor(nests, dtype=torch.long),
+        "food_idx": torch.tensor(foods, dtype=torch.long)
     }
    
     return sender_input, labels, receiver_input, aux_input
