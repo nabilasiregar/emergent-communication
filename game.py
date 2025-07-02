@@ -204,13 +204,13 @@ def perform_training(opts, train_loader, val_loader, game, callbacks, device, ex
         
     callbacks = [
         ConsoleLogger(print_train_loss=True, as_json=True),
-        # InteractionSaver(
-        #     train_epochs=list(range(1, opts.n_epochs + 1)),
-        #     test_epochs=list(range(1, opts.n_epochs + 1)),
-        #     checkpoint_dir=f"logs/interactions/{timestamp_str}/{experiment_name}",
-        #     aggregated_interaction=False
-        # ),
-        # CsvLogger(log_dir=f"logs/csv/{timestamp_str}", filename=experiment_name),
+        InteractionSaver(
+            train_epochs=list(range(1, opts.n_epochs + 1)),
+            test_epochs=list(range(1, opts.n_epochs + 1)),
+            checkpoint_dir=f"logs/interactions/{timestamp_str}/{experiment_name}",
+            aggregated_interaction=False
+        ),
+        CsvLogger(log_dir=f"logs/csv/{timestamp_str}", filename=experiment_name),
         TemperatureUpdater(agent=game.sender, decay=0.9, minimum=0.5),
         EarlyStopperLoss(
         patience=10,
@@ -241,7 +241,7 @@ def main(params, experiment_name=None):
     set_seed(opts.random_seed)
 
     if experiment_name is None:
-        experiment_name = f"vocabsize{opts.vocab_size}_{opts.communication_type}_{opts.mode}_seed{opts.random_seed}"
+        experiment_name = f"binneddistance_{opts.communication_type}_{opts.mode}_seed{opts.random_seed}"
     
     train_dataset = torch.load(opts.train_data)
 

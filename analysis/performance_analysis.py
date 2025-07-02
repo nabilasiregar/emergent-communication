@@ -16,11 +16,25 @@ def plot_accuracies_over_epochs(
     for path in csv_files:
         if not os.path.isfile(path):
             raise FileNotFoundError(f"No such file: {path!r}")
+        
         df = pd.read_csv(path)
+        
+        required_cols = ["epoch", "acc", "mode"]
+        if not all(col in df.columns for col in required_cols):
+            raise ValueError(f"Missing required columns {required_cols} in {path}")
+        
         seed_label = os.path.splitext(os.path.basename(path))[0]
         df["seed"] = seed_label
         all_dfs.append(df)
+    
+    if not all_dfs:
+        raise ValueError("No CSV files provided")
+    
     combined = pd.concat(all_dfs, ignore_index=True)
+    
+    if combined.empty:
+        print("No data found in any CSV files")
+        return
 
     combined["epoch"] = combined["epoch"].astype(int)
     combined["acc"] = combined["acc"].astype(float)
@@ -52,7 +66,7 @@ def plot_accuracies_over_epochs(
     if not test_stats.empty:
         epochs_test = test_stats["epoch"].to_numpy()
         mean_test = test_stats["mean"].to_numpy()
-        std_test = test_stats["std"].to_numpy()
+        std_test = test_stats["std"].fillna(0).to_numpy()
         plt.plot(
             epochs_test,
             mean_test,
@@ -226,7 +240,7 @@ def plot_accuracy_over_epochs_by_condition(
     csv_files: list,
     xlabel: str = "Epoch",
     ylabel: str = "Test Accuracy",
-    title: str = "Impact of Max Length on Human Agent Learning"
+    title: str = "Impact of Vocabulary Size on Human Agent Learning"
 ):
     """
     Plots mean test accuracy over epochs for different experimental conditions.
@@ -238,10 +252,9 @@ def plot_accuracy_over_epochs_by_condition(
     all_dfs = []
 
     label_map = {
-        'maxlen10_human_gs': 'maxlen = 10',
-        'maxlen2_human_gs':  'maxlen = 2',
-        'maxlen4_human_gs':  'maxlen = 4',
-        'maxlen6_human_gs':  'maxlen = 6'
+        'human_vocab_sweep_vocab_size20': 'vocab size = 20',
+        'human_vocab_sweep_vocab_size50': 'vocab size = 50',
+        'human_vocab_sweep_vocab_size100': 'vocab size = 100'
     }
 
     for path in csv_files:
@@ -252,7 +265,7 @@ def plot_accuracy_over_epochs_by_condition(
         df = pd.read_csv(path)
         
         basename = os.path.basename(path)
-        match = re.search(r'(.*)_seed\d+', basename)
+        match = re.search(r'(human_vocab_sweep_vocab_size\d+)_seed\d+', basename)
         if match:
             raw_label = match.group(1)
         else:
@@ -280,7 +293,7 @@ def plot_accuracy_over_epochs_by_condition(
     ax = plt.gca()
 
     try:
-        conditions = sorted(stats["condition"].unique(), key=lambda x: int(re.search(r'\d+', x).group()))
+        conditions = sorted(stats["condition"].unique(), key=lambda x: int(re.search(r'(\d+)', x).group(1)))
     except (AttributeError, TypeError):
         conditions = sorted(stats["condition"].unique())
 
@@ -577,54 +590,264 @@ def create_test_accuracy_bar_plot(file_paths, title: str = "Test Communication S
     
     return fig, ax
 
+def create_ablation_test_accuracy_plot(ablation_files, title: str = "Ablation Study: Test Communication Success", figsize: tuple = (12, 8), save_path: str = None):
+    """
+    Create a bar plot showing the effect of ablations on test accuracy at the last epoch.
+    """
+    
+    def extract_last_epoch_test_accuracy(file_path):
+        """Extract test accuracy from the last epoch in a csv file"""
+        try:
+            if file_path.endswith('.csv'):
+                df = pd.read_csv(file_path)
+                test_data = df[df['mode'] == 'test']
+                if test_data.empty:
+                    print(f"Warning: No test data found in {file_path}")
+                    return None
+                
+                last_test_acc = test_data['acc'].iloc[-1]
+                return last_test_acc
+            
+            else:
+                with open(file_path, 'r') as f:
+                    lines = f.readlines()
+                
+                last_test_acc = None
+                for line in reversed(lines):
+                    if 'test_acc' in line:
+                        try:
+                            data = json.loads(line.strip())
+                            if 'test_acc' in data:
+                                last_test_acc = data['test_acc']
+                                break
+                        except json.JSONDecodeError:
+                            if 'test_acc:' in line:
+                                parts = line.split('test_acc:')
+                                if len(parts) > 1:
+                                    acc_str = parts[1].strip().split()[0]
+                                    last_test_acc = float(acc_str)
+                                    break
+                
+                if last_test_acc is None:
+                    print(f"Warning: Could not find test_acc in {file_path}")
+                    return None
+                
+                return last_test_acc
+                
+        except FileNotFoundError:
+            print(f"Error: File not found - {file_path}")
+            return None
+        except Exception as e:
+            print(f"Error reading {file_path}: {e}")
+            return None
+    
+    def classify_ablation_type(file_path):
+        """Classify the ablation type based on filename"""
+        filename = file_path.split('/')[-1].lower()
+        
+        if 'zerodistance' in filename:
+            return 'zeroed-out distance'
+        elif 'binneddistance' in filename or 'binnedistance' in filename:
+            return 'binned distance'
+        else:
+            return 'baseline'
+    
+    ablation_colors = {
+        'baseline': '#2E86AB',          # Blue
+        'zeroed-out distance': '#A23B72', # Purple-red
+        'binned distance': '#F18F01'    # Orange
+    }
+    
+    # Group files by communication type and ablation type
+    grouped_results = {}
+    
+    for comm_type, paths in ablation_files.items():
+        if comm_type not in grouped_results:
+            grouped_results[comm_type] = {}
+        
+        # Group by ablation type
+        for path in paths:
+            ablation_type = classify_ablation_type(path)
+            
+            if ablation_type not in grouped_results[comm_type]:
+                grouped_results[comm_type][ablation_type] = []
+            
+            grouped_results[comm_type][ablation_type].append(path)
+    
+    final_results = {}
+    
+    for comm_type, ablation_groups in grouped_results.items():
+        final_results[comm_type] = {}
+        
+        for ablation_type, paths in ablation_groups.items():
+            accuracies = []
+            
+            for path in paths:
+                acc = extract_last_epoch_test_accuracy(path)
+                if acc is not None:
+                    accuracies.append(acc)
+            
+            if len(accuracies) > 0:
+                final_results[comm_type][ablation_type] = {
+                    'mean': np.mean(accuracies),
+                    'std': np.std(accuracies, ddof=1) if len(accuracies) > 1 else 0,
+                    'values': accuracies,
+                    'n': len(accuracies)
+                }
+                print(f"{comm_type} {ablation_type}: {accuracies} -> mean={final_results[comm_type][ablation_type]['mean']:.4f}, std={final_results[comm_type][ablation_type]['std']:.4f}")
+            else:
+                print(f"Warning: No valid accuracies found for {comm_type} {ablation_type}")
+    
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    ablation_order = ['baseline', 'zeroed-out distance', 'binned distance']
+    
+    x_pos = np.arange(2)
+    width = 0.25
+    
+    # Plot bars for each ablation type
+    for i, ablation_type in enumerate(ablation_order):
+        bee_mean = bee_std = human_mean = human_std = 0
+        bee_n = human_n = 0
+        
+        if 'bee' in final_results and ablation_type in final_results['bee']:
+            bee_data = final_results['bee'][ablation_type]
+            bee_mean = bee_data['mean']
+            bee_std = bee_data['std']
+            bee_n = bee_data['n']
+        
+        if 'human' in final_results and ablation_type in final_results['human']:
+            human_data = final_results['human'][ablation_type]
+            human_mean = human_data['mean']
+            human_std = human_data['std']
+            human_n = human_data['n']
+        
+        color = ablation_colors[ablation_type]
+        
+        if bee_n > 0:
+            ax.bar(x_pos[0] + i * width - width, bee_mean, width, 
+                   yerr=bee_std, capsize=3, color=color, alpha=0.8, 
+                   edgecolor='black', linewidth=1, label=ablation_type if i == 0 else "")
+        
+        if human_n > 0:
+            ax.bar(x_pos[1] + i * width - width, human_mean, width, 
+                   yerr=human_std, capsize=3, color=color, alpha=0.8, 
+                   edgecolor='black', linewidth=1)
+    
+    ax.set_ylabel('Accuracy', fontsize=14)
+    ax.set_title(title, fontsize=16, pad=20)
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels(['Bee', 'Human'], fontsize=14)
+    ax.tick_params(axis='y', labelsize=12)
+    
+    legend_elements = []
+    for ablation_type in ablation_order:
+        if any(ablation_type in final_results.get(comm_type, {}) for comm_type in ['bee', 'human']):
+            legend_elements.append(plt.Rectangle((0, 0), 1, 1, 
+                                               facecolor=ablation_colors[ablation_type], 
+                                               edgecolor='black', alpha=0.8,
+                                               label=ablation_type.title()))
+    
+    if legend_elements:
+        ax.legend(handles=legend_elements, loc='upper right', fontsize=12)
+    
+    all_means = []
+    all_stds = []
+    for comm_type in final_results.values():
+        for data in comm_type.values():
+            all_means.append(data['mean'])
+            all_stds.append(data['std'])
+    
+    if all_means:
+        y_min = max(0, min(all_means) - max(all_stds) - 0.05)
+        y_max = min(1, max(all_means) + max(all_stds) + 0.05)
+        ax.set_ylim(y_min, y_max)
+    
+    ax.set_axisbelow(True)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Plot saved to {save_path}")
+    
+    return fig, ax
+
 
 if __name__ == "__main__":
-    csv_list = [
-        # "logs/csv/2025-06-16/gamesize5_bee_gs_seed42.csv",
-        # "logs/csv/2025-06-16/gamesize5_bee_gs_seed123.csv",
-        # "logs/csv/2025-06-16/gamesize5_bee_gs_seed2025.csv",
-        # "logs/csv/2025-06-16/gamesize10_bee_gs_seed42.csv",
-        # "logs/csv/2025-06-16/gamesize10_bee_gs_seed123.csv",
-        # "logs/csv/2025-06-16/gamesize10_bee_gs_seed2025.csv",
-        # "logs/csv/2025-06-16/gamesize20_bee_gs_seed42.csv",
-        # "logs/csv/2025-06-16/gamesize20_bee_gs_seed123.csv",
-        # "logs/csv/2025-06-16/gamesize20_bee_gs_seed2025.csv",
-        # "logs/csv/2025-06-16/gamesize5_human_gs_seed42.csv",
-        # "logs/csv/2025-06-16/gamesize5_human_gs_seed123.csv",
-        # "logs/csv/2025-06-16/gamesize5_human_gs_seed2025.csv",
-        # "logs/csv/2025-06-16/gamesize10_human_gs_seed42.csv",
-        # "logs/csv/2025-06-16/gamesize10_human_gs_seed123.csv",
-        # "logs/csv/2025-06-16/gamesize10_human_gs_seed2025.csv",
-        # "logs/csv/2025-06-16/gamesize20_human_gs_seed42.csv",
-        # "logs/csv/2025-06-16/gamesize20_human_gs_seed123.csv",
-        # "logs/csv/2025-06-16/gamesize20_human_gs_seed2025.csv",
-        # "logs/csv/2025-06-16/maxlen2_human_gs_seed42.csv",
-        # "logs/csv/2025-06-16/maxlen4_human_gs_seed42.csv",
-        # "logs/csv/2025-06-16/maxlen6_human_gs_seed42.csv"
-        "logs/csv/2025-06-22/maxlen2_human_gs_seed42.csv",
-        "logs/csv/2025-06-23/maxlen2_human_gs_seed123.csv",
-        "logs/csv/2025-06-23/maxlen2_human_gs_seed2025.csv",
-        # "logs/csv/2025-06-22/maxlen4_human_gs_seed42.csv",
-        "logs/csv/2025-06-23/maxlen4_human_gs_seed123.csv",
-        "logs/csv/2025-06-23/maxlen4_human_gs_seed2025.csv",
-        "logs/csv/2025-06-22/maxlen6_human_gs_seed42.csv",
-        "logs/csv/2025-06-23/maxlen6_human_gs_seed123.csv",
-        "logs/csv/2025-06-23/maxlen6_human_gs_seed2025.csv",
-        "logs/csv/2025-06-22/maxlen10_human_gs_seed42.csv",
-        "logs/csv/2025-06-23/maxlen10_human_gs_seed123.csv",
-        "logs/csv/2025-06-23/maxlen10_human_gs_seed2025.csv"
+    vary_vocab_size_files = [
+        "logs/csv/2025-06-22/human_vocab_sweep_vocab_size20_seed42.csv",
+        "logs/csv/2025-06-22/human_vocab_sweep_vocab_size20_seed123.csv",
+        "logs/csv/2025-06-22/human_vocab_sweep_vocab_size20_seed2025.csv",
+        "logs/csv/2025-06-22/human_vocab_sweep_vocab_size50_seed42.csv",
+        "logs/csv/2025-06-23/human_vocab_sweep_vocab_size50_seed123.csv",
+        "logs/csv/2025-06-23/human_vocab_sweep_vocab_size50_seed2025.csv",
+        "logs/csv/2025-06-23/human_vocab_sweep_vocab_size100_seed42.csv",
+        "logs/csv/2025-06-23/human_vocab_sweep_vocab_size100_seed123.csv",
+        "logs/csv/2025-06-23/human_vocab_sweep_vocab_size100_seed2025.csv"
+    ]
+
+    # plot_accuracy_over_epochs_by_condition(csv_files=vary_vocab_size_files)
+
+    removal_of_cont_token_files = [
+        "logs/csv/2025-07-02/discreteonly_lr0.001_temp1.0_vocabsize8_bee_gs_seed42.csv",
+        "logs/csv/2025-07-02/discreteonly_lr0.001_temp1.0_vocabsize8_bee_gs_seed123.csv",
+        "logs/csv/2025-07-02/discreteonly_lr0.001_temp1.0_vocabsize8_bee_gs_seed2025.csv"
     ]
 
     # plot_accuracies_over_epochs(
-    #     csv_files=csv_list,
-    #     title="Mean Accuracy Over Epochs in Human"
+    #     csv_files=removal_of_cont_token_files,
+    #     title="Effect of No Continuous Token in Bee Communication"
     # )
 
-    # plot_losses_over_epochs(csv_files=csv_list, title="Mean Loss Over Epochs in Human")
+    # plot_losses_over_epochs(csv_files=csv_list, title="Effect of Vocabulary Size on Mean Loss Over Epochs in Human")
 
     # plot_final_accuracy_by_gamesize(csv_files=csv_list)
-    # plot_accuracy_over_epochs_by_condition(csv_files=csv_list)
+    
+    ablation_files = {
+        'bee': [
+            # baseline
+            'logs/csv/2025-07-02/gamesize10_bee_gs_seed42.csv',
+            'logs/csv/2025-07-02/gamesize10_bee_gs_seed123.csv', 
+            'logs/csv/2025-07-02/gamesize10_bee_gs_seed2025.csv',
+            'logs/csv/2025-07-02/gamesize10_bee_gs_seed31.csv', 
+            'logs/csv/2025-07-02/gamesize10_bee_gs_seed27.csv',
+            # zeroed-out distance
+            "logs/csv/2025-07-02/zerodistance_bee_gs_seed27.csv",
+            "logs/csv/2025-07-02/zerodistance_bee_gs_seed31.csv",
+            "logs/csv/2025-07-02/zerodistance_bee_gs_seed42.csv",
+            "logs/csv/2025-07-02/zerodistance_bee_gs_seed123.csv",
+            "logs/csv/2025-07-02/zerodistance_bee_gs_seed2025.csv",
+            # binned distance
+            "logs/csv/2025-07-02/binneddistance_bee_gs_seed27.csv",
+            "logs/csv/2025-07-02/binnedistance_bee_gs_seed31.csv",
+            "logs/csv/2025-07-02/binneddistance_bee_gs_seed42.csv",
+            "logs/csv/2025-07-02/binneddistance_bee_gs_seed123.csv",
+            "logs/csv/2025-07-02/binneddistance_bee_gs_seed2025.csv"
+        ],
+        'human': [
+            # baseline
+            'logs/csv/2025-06-30/gamesize10_maxlen10_human_gs_seed42.csv',
+            'logs/csv/2025-06-30/gamesize10_maxlen10_human_gs_seed123.csv',
+            'logs/csv/2025-06-30/gamesize10_maxlen10_human_gs_seed2025.csv',
+            # zeroed-out distance
+            "logs/csv/2025-07-02/zerodistance_human_gs_seed31.csv",
+            "logs/csv/2025-07-02/zerodistance_human_gs_seed42.csv",
+            "logs/csv/2025-07-02/zerodistance_human_gs_seed123.csv",
+            "logs/csv/2025-07-02/zerodistance_human_gs_seed2025.csv",
+            # binned distance
+            "logs/csv/2025-07-02/binneddistance_human_gs_seed42.csv",
+            "logs/csv/2025-07-02/binneddistance_human_gs_seed123.csv",
+            "logs/csv/2025-07-02/binneddistance_human_gs_seed2025.csv"
+        ]
+    }
 
+    create_ablation_test_accuracy_plot(
+        ablation_files, 
+        title="Ablation Study: Effect on Test Communication Success",
+        save_path="ablation_results.png"
+    )
+    
     files = {
         'bee': [
             'logs/csv/2025-07-02/gamesize5_bee_gs_seed42.csv',
@@ -683,8 +906,8 @@ if __name__ == "__main__":
         ]
     }
 
-    create_test_accuracy_bar_plot(
-        file_paths=files,
-        title="Test Communication Success",
-        save_path="test_communication_success.png"
-    )
+    # create_test_accuracy_bar_plot(
+    #     file_paths=files,
+    #     title="Test Communication Success",
+    #     save_path="test_communication_success.png"
+    # )

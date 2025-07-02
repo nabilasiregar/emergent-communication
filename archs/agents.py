@@ -20,6 +20,15 @@ class BeeSender(nn.Module):
 
     def forward(self, x, aux_input):
         data, nest, food = aux_input["data"], aux_input["nest_tensor"], aux_input["food_tensor"]
+        # ablation: zeroed-out distance
+        # data.edge_attr[:, 0] = 0
+        # ablation: bin distance
+        distances = data.edge_attr[:, 0]
+        min_dist, max_dist = distances.min(), distances.max()
+        bin_size = (max_dist - min_dist) / 3
+        binned_distances = torch.floor((distances - min_dist) / bin_size)
+        # to handle edge case where distance == max_dist
+        binned_distances = torch.clamp(binned_distances, 0, 2)
         node = self.encoder(data)
         h    = torch.tanh(self.fc(torch.cat([node[nest], node[food]], dim=-1)))
         return h 
@@ -41,6 +50,19 @@ class BeeReceiver(nn.Module):
         data = aux_input["data"]
         nest = aux_input["nest_tensor"]
         message_vec = torch.relu(self.merge(message))
+
+        # ablation: zeroed-out distance
+        # data.edge_attr[:, 0] = 0
+
+        # ablation: bin distance
+        distances = data.edge_attr[:, 0]
+        min_dist, max_dist = distances.min(), distances.max()
+        bin_size = (max_dist - min_dist) / 3
+        binned_distances = torch.floor((distances - min_dist) / bin_size)
+        # to handle edge case where distance == max_dist
+        binned_distances = torch.clamp(binned_distances, 0, 2)
+        
+        data.edge_attr[:, 0] = binned_distances
 
         x_clean = strip_node_types(data.x, self.keep_dims)
         node = self.encoder(data, x_override=x_clean)
@@ -69,6 +91,16 @@ class HumanSender(nn.Module):
         nest_id   = aux_input["nest_tensor"]
         food_id   = aux_input["food_tensor"]
 
+        # ablation: zeroed-out distance
+        # data.edge_attr[:, 0] = 0
+        # ablation: bin distance
+        distances = data.edge_attr[:, 0]
+        min_dist, max_dist = distances.min(), distances.max()
+        bin_size = (max_dist - min_dist) / 3
+        binned_distances = torch.floor((distances - min_dist) / bin_size)
+        # to handle edge case where distance == max_dist
+        binned_distances = torch.clamp(binned_distances, 0, 2)
+
         node_emb   = self.encoder(data)
         nest_emb   = node_emb[nest_id]
         food_emb   = node_emb[food_id]
@@ -96,6 +128,15 @@ class HumanReceiver(nn.Module):
 
     def forward(self, x, _receiver_input, aux_input):
         data       = aux_input["data"]
+        # ablation: zeroed-out distance
+        # data.edge_attr[:, 0] = 0
+        # ablation: bin distance
+        distances = data.edge_attr[:, 0]
+        min_dist, max_dist = distances.min(), distances.max()
+        bin_size = (max_dist - min_dist) / 3
+        binned_distances = torch.floor((distances - min_dist) / bin_size)
+        # to handle edge case where distance == max_dist
+        binned_distances = torch.clamp(binned_distances, 0, 2)
         # receiver knows nest position
         nest_id   = aux_input["nest_tensor"]
         # but not other node types
