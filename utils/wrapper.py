@@ -34,7 +34,10 @@ class MixedSymbolSenderWrapper(nn.Module):
         self.agent = agent
         self.vocab_size = vocab_size
         self.straight_through = straight_through
+        
+        # this is for ablation study to remove/use the continuous token
         self.use_continuous = use_continuous
+
         if trainable_temperature:
             self.temperature = nn.Parameter(torch.tensor([temperature]))
         else:
@@ -86,7 +89,10 @@ class MixedSymbolReceiverWrapper(nn.Module):
     ) -> None:
         super().__init__()
         self.agent = agent
+
+        # this is for ablation study to remove/use the continuous token
         self.use_continuous = use_continuous
+
         self.embedding_a = RelaxedEmbedding(vocab_size, agent_input_size)
         self.embedding_b = nn.Linear(1, agent_input_size)
         
