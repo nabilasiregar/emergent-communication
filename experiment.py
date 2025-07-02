@@ -5,10 +5,15 @@ import yaml
 import game
 import pdb
 
-SEEDS = [123, 2025]
+SEEDS = [42, 123, 2025, 31, 27]
 
 EXPERIMENTS = {
     "bee_default": [{}],
+    "bee_gamesize_sweep": [
+        {"train_data": "data/samples:10_000_train_data_totalnodes:5.pt", "validation_data": "data/samples:10_000_test_data_totalnodes:5.pt"},
+        {"train_data": "data/samples:10_000_train_data_totalnodes:10.pt", "validation_data": "data/samples:10_000_test_data_totalnodes:10.pt"}
+        {"train_data": "data/samples:10_000_train_data_totalnodes:20.pt", "validation_data": "data/samples:10_000_test_data_totalnodes:20.pt"}
+    ],
     "human_vocab_sweep": [
         {"vocab_size": 20},
         {"vocab_size": 50},
@@ -19,6 +24,22 @@ EXPERIMENTS = {
         {"max_len": 4},
         {"max_len": 6},
         {"max_len": 10},
+    ],
+    "human_maxlen_gamesize_sweep": [
+        {"max_len": 2, "train_data": "data/samples:10_000_train_data_totalnodes:5.pt", "validation_data": "data/samples:10_000_test_data_totalnodes:5.pt"},
+        {"max_len": 4, "train_data": "data/samples:10_000_train_data_totalnodes:5.pt", "validation_data": "data/samples:10_000_test_data_totalnodes:5.pt"},
+        {"max_len": 6, "train_data": "data/samples:10_000_train_data_totalnodes:5.pt", "validation_data": "data/samples:10_000_test_data_totalnodes:5.pt"},
+        {"max_len": 10, "train_data": "data/samples:10_000_train_data_totalnodes:5.pt", "validation_data": "data/samples:10_000_test_data_totalnodes:5.pt"},
+
+        {"max_len": 2, "train_data": "data/samples:10_000_train_data_totalnodes:10.pt", "validation_data": "data/samples:10_000_test_data_totalnodes:10.pt"},
+        {"max_len": 4, "train_data": "data/samples:10_000_train_data_totalnodes:10.pt", "validation_data": "data/samples:10_000_test_data_totalnodes:10.pt"},
+        {"max_len": 6, "train_data": "data/samples:10_000_train_data_totalnodes:10.pt", "validation_data": "data/samples:10_000_test_data_totalnodes:10.pt"},
+        {"max_len": 10, "train_data": "data/samples:10_000_train_data_totalnodes:10.pt", "validation_data": "data/samples:10_000_test_data_totalnodes:10.pt"},
+        
+        {"max_len": 2, "train_data": "data/samples:10_000_train_data_totalnodes:20.pt", "validation_data": "data/samples:10_000_test_data_totalnodes:20.pt"},
+        {"max_len": 4, "train_data": "data/samples:10_000_train_data_totalnodes:20.pt", "validation_data": "data/samples:10_000_test_data_totalnodes:20.pt"},
+        {"max_len": 6, "train_data": "data/samples:10_000_train_data_totalnodes:20.pt", "validation_data": "data/samples:10_000_test_data_totalnodes:20.pt"},
+        {"max_len": 10, "train_data": "data/samples:10_000_train_data_totalnodes:20.pt", "validation_data": "data/samples:10_000_test_data_totalnodes:20.pt"},
     ],
     "human_default": [{}],
 }
@@ -75,12 +96,19 @@ def main():
             current_config['final_run'] = True
             
             # create a descriptive name for logging
-            name_parts = [args.name]
-            for key, val in param_variation.items():
-                name_parts.append(f"{key}{val}")
-            name_parts.append(f"seed{seed}")
+            train_data_path = param_variation.get('train_data', '')
+            if 'totalnodes:' in train_data_path:
+                game_size = train_data_path.split('totalnodes:')[1].split('.pt')[0]
+            else:
+                game_size = "10"
             
-            experiment_name = "_".join(name_parts)
+            experiment_name = f"gamesize{game_size}_bee_gs_seed{seed}"
+            # name_parts = [args.name]
+            # for key, val in param_variation.items():
+            #     name_parts.append(f"{key}{val}")
+            # name_parts.append(f"seed{seed}")
+            
+            # experiment_name = "_".join(name_parts)
 
             cli_params = config_to_cli_params(current_config)
 

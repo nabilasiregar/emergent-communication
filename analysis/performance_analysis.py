@@ -627,15 +627,21 @@ if __name__ == "__main__":
 
     files = {
         'bee': [
-            'logs/csv/2025-06-30/gamesize5_bee_gs_seed42.csv',
-            'logs/csv/2025-06-30/gamesize5_bee_gs_seed123.csv', 
-            'logs/csv/2025-06-30/gamesize5_bee_gs_seed2025.csv',
-            'logs/csv/2025-06-30/gamesize10_bee_gs_seed42.csv',
-            'logs/csv/2025-06-30/gamesize10_bee_gs_seed123.csv', 
-            'logs/csv/2025-06-30/gamesize10_bee_gs_seed2025.csv',
-            'logs/csv/2025-06-30/gamesize20_bee_gs_seed42.csv',
-            'logs/csv/2025-06-30/gamesize20_bee_gs_seed123.csv', 
-            'logs/csv/2025-06-30/gamesize20_bee_gs_seed2025.csv'
+            'logs/csv/2025-07-02/gamesize5_bee_gs_seed42.csv',
+            'logs/csv/2025-07-02/gamesize5_bee_gs_seed123.csv', 
+            'logs/csv/2025-07-02/gamesize5_bee_gs_seed2025.csv',
+            'logs/csv/2025-07-02/gamesize5_bee_gs_seed31.csv', 
+            'logs/csv/2025-07-02/gamesize5_bee_gs_seed27.csv',
+            'logs/csv/2025-07-02/gamesize10_bee_gs_seed42.csv',
+            'logs/csv/2025-07-02/gamesize10_bee_gs_seed123.csv', 
+            'logs/csv/2025-07-02/gamesize10_bee_gs_seed2025.csv',
+            'logs/csv/2025-07-02/gamesize10_bee_gs_seed31.csv', 
+            'logs/csv/2025-07-02/gamesize10_bee_gs_seed27.csv',
+            'logs/csv/2025-07-02/gamesize20_bee_gs_seed42.csv',
+            'logs/csv/2025-07-02/gamesize20_bee_gs_seed123.csv', 
+            'logs/csv/2025-07-02/gamesize20_bee_gs_seed2025.csv',
+            'logs/csv/2025-07-02/gamesize20_bee_gs_seed31.csv', 
+            'logs/csv/2025-07-02/gamesize20_bee_gs_seed27.csv'
         ],
         'human': [
             'logs/csv/2025-06-29/gamesize5_maxlen2_human_gs_seed42.csv',

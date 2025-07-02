@@ -9,6 +9,7 @@ sender_hidden: 64
 receiver_hidden: 64
 sender_embedding: 32
 receiver_embedding: 32
+vocab_size: 8
 
 optimizer: 'adam'
 lr: 0.005

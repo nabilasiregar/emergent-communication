@@ -72,7 +72,7 @@ For experimentation and fine-tuning, do not pass `--final_run` flag to the argum
 For the final run, include the `--final_run` flag to evaluate the model on the test set.
 Example:
 ```
-python -m game --communication_type bee --mode gs --train_data data/samples:10_000_train_data_totalnodes:10.pt --validation_data data/samples:10_000_test_data_totalnodes:10.pt --temperature 2.5 --lr 0.005 --sender_hidden 64 --receiver_hidden 64  --sender_embedding 32 --receiver_embedding 32 --n_epochs 100 --final_run
+python -m game --communication_type bee --mode gs --train_data data/samples:10_000_train_data_totalnodes:10.pt --validation_data data/samples:10_000_test_data_totalnodes:10.pt --temperature 2.5 --lr 0.005 --sender_hidden 64 --receiver_hidden 64  --sender_embedding 32 --receiver_embedding 32 --vocab_size 8 --n_epochs 100 --final_run
 
 python -m game --communication_type human --mode gs --train_data data/samples:10_000_train_data_totalnodes:10.pt --validation_data data/samples:10_000_test_data_totalnodes:10.pt --sender_hidden 128 --receiver_hidden 128 --sender_embedding 64 --receiver_embedding 64 --sender_cell 'gru' --receiver_cell 'gru' --vocab_size 100 --temperature 2.5 --lr 0.001 --max_len 10 --n_epochs 100 --final_run
 ```
