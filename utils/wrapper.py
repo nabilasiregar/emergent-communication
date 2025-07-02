@@ -28,11 +28,16 @@ class MixedSymbolSenderWrapper(nn.Module):
         temperature: float = 1.0,
         trainable_temperature: bool = False,
         straight_through: bool = False,
+        use_continuous: bool = True
     ) -> None:
         super().__init__()
         self.agent = agent
         self.vocab_size = vocab_size
         self.straight_through = straight_through
+        
+        # this is for ablation study to remove/use the continuous token
+        self.use_continuous = use_continuous
+
         if trainable_temperature:
             self.temperature = nn.Parameter(torch.tensor([temperature]))
         else:
@@ -50,6 +55,8 @@ class MixedSymbolSenderWrapper(nn.Module):
             self.logits_a(h), self.temperature, self.training, self.straight_through
         )
 
+        if not self.use_continuous:
+            return onehot_a
 
         mu_log     = self.mu_head(h)
         logvar_log = torch.tanh(self.logvar_head(h))
@@ -78,13 +85,22 @@ class MixedSymbolReceiverWrapper(nn.Module):
         agent: nn.Module,
         vocab_size: int,
         agent_input_size: int,
+        use_continuous: bool = True
     ) -> None:
         super().__init__()
         self.agent = agent
+
+        # this is for ablation study to remove/use the continuous token
+        self.use_continuous = use_continuous
+
         self.embedding_a = RelaxedEmbedding(vocab_size, agent_input_size)
         self.embedding_b = nn.Linear(1, agent_input_size)
-
+        
     def forward(self, message: torch.Tensor, receiver_input=None, aux_input=None):
+        if not self.use_continuous:
+            emb_a = self.embedding_a(message.unsqueeze(1))
+            merged = torch.relu(emb_a).squeeze(1)
+            return self.agent(merged, receiver_input, aux_input)
         vocab = self.embedding_a.num_embeddings
         onehot_a = message[:, :vocab].unsqueeze(1) 
         scalar_b = message[:, vocab : vocab + 1]
