@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 import re
 import json
+import math
 
 def plot_accuracies_over_epochs(
     csv_files: list,
@@ -546,12 +547,14 @@ def create_test_accuracy_bar_plot(file_paths, title: str = "Test Communication S
     )
     ax.add_artist(leg1)
     
+    max_per_col = 4
+    ncols_human = math.ceil(len(human_legend_elements) / max_per_col)
     leg2 = ax.legend(
         handles=human_legend_elements,
         title='Human (Max Len, Game Size)',
         fontsize=12,
         title_fontsize=14,
-        ncol=4,
+        ncol=ncols_human,
         labelspacing=0.6,
         handletextpad=0.4,
         columnspacing=1.0,
@@ -647,39 +650,63 @@ if __name__ == "__main__":
             'logs/csv/2025-06-29/gamesize5_maxlen2_human_gs_seed42.csv',
             'logs/csv/2025-06-29/gamesize5_maxlen2_human_gs_seed123.csv',
             'logs/csv/2025-06-29/gamesize5_maxlen2_human_gs_seed2025.csv',
+            'logs/csv/2025-07-07/gamesize5_maxlen2_human_gs_seed31.csv',
+            'logs/csv/2025-07-07/gamesize5_maxlen2_human_gs_seed27.csv',
             'logs/csv/2025-06-29/gamesize5_maxlen4_human_gs_seed42.csv',
             'logs/csv/2025-06-29/gamesize5_maxlen4_human_gs_seed123.csv',
             'logs/csv/2025-06-29/gamesize5_maxlen4_human_gs_seed2025.csv',
+            'logs/csv/2025-07-07/gamesize5_maxlen4_human_gs_seed31.csv',
+            'logs/csv/2025-07-07/gamesize5_maxlen4_human_gs_seed27.csv',
             'logs/csv/2025-06-29/gamesize5_maxlen6_human_gs_seed42.csv',
             'logs/csv/2025-06-29/gamesize5_maxlen6_human_gs_seed123.csv',
             'logs/csv/2025-06-29/gamesize5_maxlen6_human_gs_seed2025.csv',
+            'logs/csv/2025-07-07/gamesize5_maxlen6_human_gs_seed31.csv',
+            'logs/csv/2025-07-07/gamesize5_maxlen6_human_gs_seed27.csv',
             'logs/csv/2025-06-29/gamesize5_maxlen10_human_gs_seed42.csv',
             'logs/csv/2025-06-29/gamesize5_maxlen10_human_gs_seed123.csv',
             'logs/csv/2025-06-29/gamesize5_maxlen10_human_gs_seed2025.csv',
+            'logs/csv/2025-07-07/gamesize5_maxlen10_human_gs_seed31.csv',
+            'logs/csv/2025-07-07/gamesize5_maxlen10_human_gs_seed27.csv',
             'logs/csv/2025-06-29/gamesize10_maxlen2_human_gs_seed42.csv',
             'logs/csv/2025-06-29/gamesize10_maxlen2_human_gs_seed123.csv',
             'logs/csv/2025-06-29/gamesize10_maxlen2_human_gs_seed2025.csv',
+            'logs/csv/2025-07-07/gamesize10_maxlen2_human_gs_seed31.csv',
+            'logs/csv/2025-07-07/gamesize10_maxlen2_human_gs_seed27.csv',
             'logs/csv/2025-06-29/gamesize10_maxlen4_human_gs_seed42.csv',
             'logs/csv/2025-06-29/gamesize10_maxlen4_human_gs_seed123.csv',
             'logs/csv/2025-06-29/gamesize10_maxlen4_human_gs_seed2025.csv',
+            'logs/csv/2025-07-07/gamesize10_maxlen4_human_gs_seed31.csv',
+            'logs/csv/2025-07-07/gamesize10_maxlen4_human_gs_seed27.csv',
             'logs/csv/2025-06-29/gamesize10_maxlen6_human_gs_seed42.csv',
             'logs/csv/2025-06-29/gamesize10_maxlen6_human_gs_seed123.csv',
             'logs/csv/2025-06-29/gamesize10_maxlen6_human_gs_seed2025.csv',
+            'logs/csv/2025-07-07/gamesize10_maxlen6_human_gs_seed31.csv',
+            'logs/csv/2025-07-07/gamesize10_maxlen6_human_gs_seed27.csv',
             'logs/csv/2025-06-30/gamesize10_maxlen10_human_gs_seed42.csv',
             'logs/csv/2025-06-30/gamesize10_maxlen10_human_gs_seed123.csv',
             'logs/csv/2025-06-30/gamesize10_maxlen10_human_gs_seed2025.csv',
+            'logs/csv/2025-07-07/gamesize10_maxlen10_human_gs_seed31.csv',
+            'logs/csv/2025-07-07/gamesize10_maxlen10_human_gs_seed27.csv',
             'logs/csv/2025-06-30/gamesize20_maxlen2_human_gs_seed42.csv',
             'logs/csv/2025-06-30/gamesize20_maxlen2_human_gs_seed123.csv',
             'logs/csv/2025-06-30/gamesize20_maxlen2_human_gs_seed2025.csv',
+            'logs/csv/2025-07-07/gamesize20_maxlen2_human_gs_seed31.csv',
+            'logs/csv/2025-07-07/gamesize20_maxlen2_human_gs_seed27.csv',
             'logs/csv/2025-06-30/gamesize20_maxlen4_human_gs_seed42.csv',
             'logs/csv/2025-06-30/gamesize20_maxlen4_human_gs_seed123.csv',
             'logs/csv/2025-06-30/gamesize20_maxlen4_human_gs_seed2025.csv',
+            'logs/csv/2025-07-07/gamesize20_maxlen4_human_gs_seed31.csv',
+            'logs/csv/2025-07-07/gamesize20_maxlen4_human_gs_seed27.csv',
             'logs/csv/2025-06-30/gamesize20_maxlen6_human_gs_seed42.csv',
             'logs/csv/2025-06-30/gamesize20_maxlen6_human_gs_seed123.csv',
             'logs/csv/2025-06-30/gamesize20_maxlen6_human_gs_seed2025.csv',
+            'logs/csv/2025-07-07/gamesize20_maxlen6_human_gs_seed31.csv',
+            'logs/csv/2025-07-07/gamesize20_maxlen6_human_gs_seed27.csv',
             'logs/csv/2025-06-30/gamesize20_maxlen10_human_gs_seed42.csv',
             'logs/csv/2025-06-30/gamesize20_maxlen10_human_gs_seed123.csv',
-            'logs/csv/2025-06-30/gamesize20_maxlen10_human_gs_seed2025.csv'
+            'logs/csv/2025-06-30/gamesize20_maxlen10_human_gs_seed2025.csv',
+            'logs/csv/2025-07-07/gamesize20_maxlen10_human_gs_seed31.csv',
+            'logs/csv/2025-07-07/gamesize20_maxlen10_human_gs_seed27.csv'
         ]
     }
 
