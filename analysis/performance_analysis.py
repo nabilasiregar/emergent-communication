@@ -715,6 +715,139 @@ def create_human_vocab_maxlen_plot(file_paths, save_path=None):
     
     return fig, ax
 
+def create_ablation_test_accuracy_plot(ablation_files, save_path: str = None):
+    """
+    Create a bar plot showing the effect of ablations on test accuracy at the last epoch.
+    """
+    def classify_ablation_type(file_path):
+        """Classify the ablation type based on filename"""
+        filename = file_path.split('/')[-1].lower()
+        
+        if 'zerodistance' in filename:
+            return 'zeroed-out distance'
+        elif 'binneddistance' in filename or 'binnedistance' in filename:
+            return 'binned distance'
+        else:
+            return 'baseline'
+    
+    ablation_colors = {
+        'baseline': '#2E86AB',
+        'zeroed-out distance': '#A23B72',
+        'binned distance': '#F18F01'
+    }
+    
+    grouped_results = {}
+    
+    for comm_type, paths in ablation_files.items():
+        if comm_type not in grouped_results:
+            grouped_results[comm_type] = {}
+        
+        # Group by ablation type
+        for path in paths:
+            ablation_type = classify_ablation_type(path)
+            
+            if ablation_type not in grouped_results[comm_type]:
+                grouped_results[comm_type][ablation_type] = []
+            
+            grouped_results[comm_type][ablation_type].append(path)
+    
+    final_results = {}
+    
+    for comm_type, ablation_groups in grouped_results.items():
+        final_results[comm_type] = {}
+        
+        for ablation_type, paths in ablation_groups.items():
+            accuracies = []
+            
+            for path in paths:
+                acc = extract_last_epoch_test_accuracy(path)
+                if acc is not None:
+                    accuracies.append(acc)
+            
+            if len(accuracies) > 0:
+                final_results[comm_type][ablation_type] = {
+                    'mean': np.mean(accuracies),
+                    'std': np.std(accuracies, ddof=1) if len(accuracies) > 1 else 0,
+                    'values': accuracies,
+                    'n': len(accuracies)
+                }
+                print(f"{comm_type} {ablation_type}: {accuracies} -> mean={final_results[comm_type][ablation_type]['mean']:.4f}, std={final_results[comm_type][ablation_type]['std']:.4f}")
+            else:
+                print(f"Warning: No valid accuracies found for {comm_type} {ablation_type}")
+    
+    fig, ax = plt.subplots(figsize=(12, 8))
+    
+    ablation_order = ['baseline', 'zeroed-out distance', 'binned distance']
+    
+    x_pos = np.arange(2)
+    width = 0.25
+    
+    for i, ablation_type in enumerate(ablation_order):
+        bee_mean = bee_std = human_mean = human_std = 0
+        bee_n = human_n = 0
+        
+        if 'bee' in final_results and ablation_type in final_results['bee']:
+            bee_data = final_results['bee'][ablation_type]
+            bee_mean = bee_data['mean']
+            bee_std = bee_data['std']
+            bee_n = bee_data['n']
+        
+        if 'human' in final_results and ablation_type in final_results['human']:
+            human_data = final_results['human'][ablation_type]
+            human_mean = human_data['mean']
+            human_std = human_data['std']
+            human_n = human_data['n']
+        
+        color = ablation_colors[ablation_type]
+        
+        if bee_n > 0:
+            ax.bar(x_pos[0] + i * width - width, bee_mean, width, 
+                   yerr=bee_std, capsize=3, color=color, alpha=0.8, 
+                   edgecolor='black', linewidth=1, label=ablation_type if i == 0 else "")
+        
+        if human_n > 0:
+            ax.bar(x_pos[1] + i * width - width, human_mean, width, 
+                   yerr=human_std, capsize=3, color=color, alpha=0.8, 
+                   edgecolor='black', linewidth=1)
+    
+    ax.set_ylabel('Accuracy', fontsize=14)
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels(['Bee', 'Human'], fontsize=14)
+    ax.tick_params(axis='y', labelsize=12)
+    
+    legend_elements = []
+    for ablation_type in ablation_order:
+        if any(ablation_type in final_results.get(comm_type, {}) for comm_type in ['bee', 'human']):
+            legend_elements.append(plt.Rectangle((0, 0), 1, 1, 
+                                               facecolor=ablation_colors[ablation_type], 
+                                               edgecolor='black', alpha=0.8,
+                                               label=ablation_type.title()))
+    
+    if legend_elements:
+        ax.legend(handles=legend_elements, loc='best', fontsize=12)
+    
+    all_means = []
+    all_stds = []
+    for comm_type in final_results.values():
+        for data in comm_type.values():
+            all_means.append(data['mean'])
+            all_stds.append(data['std'])
+    
+    if all_means:
+        y_min = max(0, min(all_means) - max(all_stds) - 0.05)
+        y_max = min(1, max(all_means) + max(all_stds) + 0.05)
+        ax.set_ylim(y_min, y_max)
+    
+    ax.set_axisbelow(True)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Plot saved to {save_path}")
+    
+    return fig, ax
+
 if __name__ == "__main__":
     csv_list = [
         # "logs/csv/2025-06-16/gamesize5_bee_gs_seed42.csv",
@@ -913,7 +1046,56 @@ if __name__ == "__main__":
         "logs/csv/2025-06-23/maxlen10_human_gs_seed2025.csv"
     ]
 
-    # fig, ax = create_human_vocab_maxlen_plot(
-    #     vary_maxlen_vocab_filepaths,
-    #     save_path="human_communication_maxlen_vocab_plot.png"
-    # )
+    fig, ax = create_human_vocab_maxlen_plot(
+        vary_maxlen_vocab_filepaths,
+        save_path="human_communication_maxlen_vocab_plot.png"
+    )
+
+    ablation_files = {
+        'bee': [
+            # baseline
+            'logs/csv/2025-07-02/gamesize10_bee_gs_seed42.csv',
+            'logs/csv/2025-07-02/gamesize10_bee_gs_seed123.csv', 
+            'logs/csv/2025-07-02/gamesize10_bee_gs_seed2025.csv',
+            'logs/csv/2025-07-02/gamesize10_bee_gs_seed31.csv', 
+            'logs/csv/2025-07-02/gamesize10_bee_gs_seed27.csv',
+            # zeroed-out distance
+            "logs/csv/2025-07-02/zerodistance_bee_gs_seed27.csv",
+            "logs/csv/2025-07-02/zerodistance_bee_gs_seed31.csv",
+            "logs/csv/2025-07-02/zerodistance_bee_gs_seed42.csv",
+            "logs/csv/2025-07-02/zerodistance_bee_gs_seed123.csv",
+            "logs/csv/2025-07-02/zerodistance_bee_gs_seed2025.csv",
+            # binned distance
+            "logs/csv/2025-07-02/binneddistance_bee_gs_seed27.csv",
+            "logs/csv/2025-07-02/binneddistance_bee_gs_seed31.csv",
+            "logs/csv/2025-07-02/binneddistance_bee_gs_seed42.csv",
+            "logs/csv/2025-07-02/binneddistance_bee_gs_seed123.csv",
+            "logs/csv/2025-07-02/binneddistance_bee_gs_seed2025.csv"
+
+        ],
+        'human': [
+            # baseline
+            'logs/csv/2025-06-30/gamesize10_maxlen10_human_gs_seed42.csv',
+            'logs/csv/2025-06-30/gamesize10_maxlen10_human_gs_seed123.csv',
+            'logs/csv/2025-06-30/gamesize10_maxlen10_human_gs_seed2025.csv',
+            'logs/csv/2025-07-07/gamesize10_maxlen10_human_gs_seed27.csv',
+            'logs/csv/2025-07-07/gamesize10_maxlen10_human_gs_seed31.csv',
+            # zeroed-out distance
+            "logs/csv/2025-07-02/zerodistance_human_gs_seed27.csv",
+            "logs/csv/2025-07-02/zerodistance_human_gs_seed31.csv",
+            "logs/csv/2025-07-02/zerodistance_human_gs_seed42.csv",
+            "logs/csv/2025-07-02/zerodistance_human_gs_seed123.csv",
+            "logs/csv/2025-07-02/zerodistance_human_gs_seed2025.csv",
+            # binned distance
+            "logs/csv/2025-07-02/binneddistance_human_gs_seed27.csv",
+            "logs/csv/2025-07-02/binneddistance_human_gs_seed31.csv",
+            "logs/csv/2025-07-02/binneddistance_human_gs_seed42.csv",
+            "logs/csv/2025-07-02/binneddistance_human_gs_seed123.csv",
+            "logs/csv/2025-07-02/binneddistance_human_gs_seed2025.csv"
+        ]
+    }
+
+    create_ablation_test_accuracy_plot(
+        ablation_files,
+        save_path="ablation_study.png"
+    )
