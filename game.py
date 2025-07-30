@@ -1,6 +1,6 @@
 import argparse
 from datetime import datetime
-import torch
+import os, json, torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
@@ -19,7 +19,7 @@ from egg.core.callbacks import (
 from egg.core.language_analysis import (
     PrintValidationEvents
 )
-import pdb
+
 def get_params(params):
     parser = argparse.ArgumentParser()
     parser.add_argument("--communication_type", choices=["bee", "human"], default="bee")
@@ -233,6 +233,16 @@ def perform_training(opts, train_loader, val_loader, game, callbacks, device, ex
     )
 
     trainer.train(n_epochs=opts.n_epochs)
+    os.makedirs("logs/models", exist_ok=True)
+    torch.save(
+        {
+            "game_state": game.state_dict(),
+            "opts": vars(opts),
+            "epoch": opts.n_epochs
+        },
+        f"logs/models/{experiment_name}_final.pt"
+    )
+
     core.close()
 
 def main(params, experiment_name=None):

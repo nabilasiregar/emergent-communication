@@ -550,10 +550,10 @@ def create_test_accuracy_bar_plot(file_paths, save_path=None):
                     color=data['color'], alpha=0.8, edgecolor='black', linewidth=1)
         human_bars.append((bar, (data['maxlen'], data['gamesize'])))
     
-    ax.set_ylabel('Accuracy', fontsize=14)
+    ax.set_ylabel('Accuracy', fontsize=16)
     ax.set_xticks(x_pos)
-    ax.set_xticklabels(['Bee', 'Human'], fontsize=14)
-    ax.tick_params(axis='y', labelsize=14)  
+    ax.set_xticklabels(['Bee', 'Human'], fontsize=16)
+    ax.tick_params(axis='y', labelsize=16)  
     
     bee_legend_elements = []
     for bar, gamesize in bee_bars:
@@ -568,8 +568,8 @@ def create_test_accuracy_bar_plot(file_paths, save_path=None):
     leg1 = ax.legend(
         handles=bee_legend_elements,
         title='Bee (Game Size)',
-        fontsize=12,
-        title_fontsize=14,
+        fontsize=16,
+        title_fontsize=16,
         ncol=3,
         labelspacing=0.6,
         handletextpad=0.4,
@@ -585,8 +585,8 @@ def create_test_accuracy_bar_plot(file_paths, save_path=None):
     leg2 = ax.legend(
         handles=human_legend_elements,
         title='Human (Max Len, Game Size)',
-        fontsize=12,
-        title_fontsize=14,
+        fontsize=16,
+        title_fontsize=16,
         ncol=ncols_human,
         labelspacing=0.6,
         handletextpad=0.4,
@@ -670,10 +670,10 @@ def create_human_vocab_maxlen_plot(file_paths, save_path=None):
                     edgecolor='black', linewidth=1)
         bars.append((bar, data['params'][0], data['params'][1]))
     
-    ax.set_ylabel('Accuracy', fontsize=14)
+    ax.set_ylabel('Accuracy', fontsize=16)
     ax.set_xticks(x_pos)
     ax.set_xticklabels([])
-    ax.tick_params(axis='y', labelsize=14)
+    ax.tick_params(axis='y', labelsize=16)
     
     legend_elements = []
     for bar, maxlen, vocab_size in bars:
@@ -688,8 +688,8 @@ def create_human_vocab_maxlen_plot(file_paths, save_path=None):
     leg = ax.legend(
         handles=legend_elements,
         title='Human (Max Len, Vocab Size)',
-        fontsize=12,
-        title_fontsize=14,
+        fontsize=16,
+        title_fontsize=16,
         ncol=ncols,
         labelspacing=0.6,
         handletextpad=0.4,
@@ -731,9 +731,9 @@ def create_ablation_test_accuracy_plot(ablation_files, save_path: str = None):
             return 'baseline'
     
     ablation_colors = {
-        'baseline': '#2E86AB',
-        'zeroed-out distance': '#A23B72',
-        'binned distance': '#F18F01'
+        'baseline': '#0073e6',
+        'zeroed-out distance': '#ff9933',
+        'binned distance': '#9966ff'
     }
     
     grouped_results = {}
@@ -810,10 +810,10 @@ def create_ablation_test_accuracy_plot(ablation_files, save_path: str = None):
                    yerr=human_std, capsize=3, color=color, alpha=0.8, 
                    edgecolor='black', linewidth=1)
     
-    ax.set_ylabel('Accuracy', fontsize=14)
+    ax.set_ylabel('Accuracy', fontsize=16)
     ax.set_xticks(x_pos)
-    ax.set_xticklabels(['Bee', 'Human'], fontsize=14)
-    ax.tick_params(axis='y', labelsize=12)
+    ax.set_xticklabels(['Bee', 'Human'], fontsize=16)
+    ax.tick_params(axis='both', labelsize=16)
     
     legend_elements = []
     for ablation_type in ablation_order:
@@ -824,7 +824,14 @@ def create_ablation_test_accuracy_plot(ablation_files, save_path: str = None):
                                                label=ablation_type.title()))
     
     if legend_elements:
-        ax.legend(handles=legend_elements, loc='best', fontsize=12)
+        ax.legend(
+            handles=legend_elements,
+            loc='upper center',
+            bbox_to_anchor=(0.5, -0.10),
+            ncol=len(legend_elements),
+            fontsize=16,
+            frameon=False
+        )
     
     all_means = []
     all_stds = []
@@ -847,6 +854,7 @@ def create_ablation_test_accuracy_plot(ablation_files, save_path: str = None):
         print(f"Plot saved to {save_path}")
     
     return fig, ax
+
 
 if __name__ == "__main__":
     csv_list = [
