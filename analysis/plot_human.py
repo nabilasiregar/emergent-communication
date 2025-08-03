@@ -2,7 +2,17 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-df = pd.read_csv('analysis/human_compositionality.csv')
+
+plt.rcParams.update({
+    "font.size": 16,
+    "axes.titlesize": 16,
+    "axes.labelsize": 16,
+    "xtick.labelsize": 14,
+    "ytick.labelsize": 16,
+    "legend.fontsize": 16,
+})
+
+df = pd.read_csv('results/human_compositionality.csv')
 
 if 'max_len' not in df.columns:
     df['max_len'] = df['seed_folder'].str.extract(r'maxlen(\d+)').astype(int)
@@ -57,13 +67,21 @@ axes[1].set_xlabel('Score')
 axes[2].set_xlabel('TRE')
 
 handles, labels = axes[0].get_legend_handles_labels()
+fig.subplots_adjust(left=0.07, right=0.98, top=0.93, bottom=0.28, hspace=0.1, wspace=-0.01)
+handles, labels = axes[0].get_legend_handles_labels()
+
 fig.legend(
-    handles, labels,
-    title='Type',
+    handles,
+    labels,
+    title="Type",
     ncol=2,
     frameon=False,
-    loc='lower center',
-    bbox_to_anchor=(0.5, -0.01)
+    loc="lower center",
+    bbox_to_anchor=(0.5, -0.04), 
+    columnspacing=1.0,
+    handletextpad=0.5,
+    borderaxespad=0.0,
 )
 
-plt.show()
+fig.savefig("human_compositionality.png", dpi=300, bbox_inches="tight", pad_inches=0.1)
+

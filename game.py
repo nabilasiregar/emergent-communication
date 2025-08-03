@@ -1,6 +1,6 @@
 import argparse
 from datetime import datetime
-import torch
+import os, json, torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
@@ -8,7 +8,7 @@ import egg.core as core
 from archs.agents import HumanSender, HumanReceiver, BeeSender, BeeReceiver
 from utils.wrapper import MixedSymbolReceiverWrapper, MixedSymbolSenderWrapper
 from utils.early_stopper import EarlyStopperLoss
-from helpers import collate_fn, set_seed
+from utils.helpers import collate_fn, set_seed
 from analysis.logger import CsvLogger
 from egg.core import Trainer, build_optimizer
 from egg.core.callbacks import (
@@ -19,7 +19,7 @@ from egg.core.callbacks import (
 from egg.core.language_analysis import (
     PrintValidationEvents
 )
-import pdb
+
 def get_params(params):
     parser = argparse.ArgumentParser()
     parser.add_argument("--communication_type", choices=["bee", "human"], default="bee")
@@ -204,12 +204,12 @@ def perform_training(opts, train_loader, val_loader, game, callbacks, device, ex
         
     callbacks = [
         ConsoleLogger(print_train_loss=True, as_json=True),
-        InteractionSaver(
-            train_epochs=list(range(1, opts.n_epochs + 1)),
-            test_epochs=list(range(1, opts.n_epochs + 1)),
-            checkpoint_dir=f"logs/interactions/{timestamp_str}/{experiment_name}",
-            aggregated_interaction=False
-        ),
+        # InteractionSaver(
+        #     train_epochs=list(range(1, opts.n_epochs + 1)),
+        #     test_epochs=list(range(1, opts.n_epochs + 1)),
+        #     checkpoint_dir=f"logs/interactions/{timestamp_str}/{experiment_name}",
+        #     aggregated_interaction=False
+        # ),
         CsvLogger(log_dir=f"logs/csv/{timestamp_str}", filename=experiment_name),
         TemperatureUpdater(agent=game.sender, decay=0.9, minimum=0.5),
         EarlyStopperLoss(
@@ -233,6 +233,16 @@ def perform_training(opts, train_loader, val_loader, game, callbacks, device, ex
     )
 
     trainer.train(n_epochs=opts.n_epochs)
+    os.makedirs("logs/models", exist_ok=True)
+    torch.save(
+        {
+            "game_state": game.state_dict(),
+            "opts": vars(opts),
+            "epoch": opts.n_epochs
+        },
+        f"logs/models/{experiment_name}.pt"
+    )
+
     core.close()
 
 def main(params, experiment_name=None):
@@ -241,7 +251,7 @@ def main(params, experiment_name=None):
     set_seed(opts.random_seed)
 
     if experiment_name is None:
-        experiment_name = f"{opts.communication_type}_{opts.mode}_seed{opts.random_seed}"
+        experiment_name = f"v2_tzsg_5nodes_{opts.communication_type}_seed{opts.random_seed}"
     
     train_dataset = torch.load(opts.train_data)
 

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from archs.arch import RGCN
-from helpers import strip_node_types
+from utils.helpers import strip_node_types
 from torch.distributions import Categorical
 from typing import Optional
 import pdb

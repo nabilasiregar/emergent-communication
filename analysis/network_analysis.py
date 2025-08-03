@@ -76,10 +76,18 @@ def analyze_graphs(graphs_data, label):
         })
 
     df = pd.DataFrame(records)
+    stats = df.describe()
+    min_values = df.min()
+    max_values = df.max()
     print(f"\n=== Statistics for {label} ===")
-    print(df.describe())
+    print(stats)
+    print("\n=== Minimum values ===")
+    print(min_values)
+    print("\n=== Maximum values ===")
+    print(max_values)
+    print("\n=== First few samples ===")
     print(df.head())
-    return df.describe()
+    return df, min_values, max_values
 
 def compute_centrality_measures(graphs_data, label):
     records = []
@@ -141,18 +149,20 @@ def identify_hub_nodes(graphs_data, label):
 
 if __name__ == "__main__":
     dataset_paths = [
-        "data/samples:10_000_test_data_totalnodes:5.pt",
-        "data/samples:10_000_test_data_totalnodes:10.pt",
-        "data/samples:10_000_test_data_totalnodes:20.pt"
+        "data/samples:10_000_train_data_totalnodes:5.pt",
+        "data/samples:10_000_train_data_totalnodes:10.pt",
+        "data/samples:10_000_train_data_totalnodes:20.pt"
     ]
 
     for path in dataset_paths:
         label = path.split("/")[-1].replace(":", "_").replace(".pt", "")
         graphs_data = build_graph(path)
 
-        stats_df = analyze_graphs(graphs_data, label)
+        stats_df, min_df, max_df = analyze_graphs(graphs_data, label)
         centrality_df = compute_centrality_measures(graphs_data, label)
         identify_hub_nodes(graphs_data, label)
 
-        stats_df.to_csv(f"results/statistics_{label}.csv", index=False)
-        centrality_df.to_csv(f"results/centrality_{label}.csv", index=False)
+        # stats_df.to_csv(f"results/statistics_{label}.csv", index=False)
+        min_df.to_frame(name="min").to_csv(f"results/minimums_{label}.csv")
+        max_df.to_frame(name="max").to_csv(f"results/maximums_{label}.csv")
+        # centrality_df.to_csv(f"results/centrality_{label}.csv", index=False)
