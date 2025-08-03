@@ -15,6 +15,7 @@ class Environment:
         max_tries: int = 100,
         world_size: Tuple[int, int] = (100, 100),
         seed: int | None = None,
+        allow_adjacent_nest_food: bool = False
     ):
         if num_nodes < 2:
             raise ValueError("Need at least 2 nodes: one nest and one food")
@@ -25,7 +26,7 @@ class Environment:
         self.world_size = world_size
         self.seed = seed
         self.rng = random.Random(self.seed)
-
+        self.allow_adjacent_nest_food = allow_adjacent_nest_food
         self.directed_graph: nx.DiGraph = nx.DiGraph()
 
         self._create_random_graph()
@@ -87,7 +88,13 @@ class Environment:
         graph = self.directed_graph.to_undirected()
         for _ in range(self.max_tries):
             nest = self.rng.choice(nodes)
-            non_neighbours = [n for n in nodes if n != nest and not graph.has_edge(nest, n)]
+
+            # this is to generate dataset that allows 1 hop
+            if self.allow_adjacent_nest_food:
+                non_neighbours = [n for n in nodes if n != nest]
+            else:
+                non_neighbours = [n for n in nodes if n != nest and not graph.has_edge(nest, n)]
+
             if not non_neighbours:
                 self._create_random_graph()
                 graph = self.directed_graph.to_undirected()
