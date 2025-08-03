@@ -32,26 +32,26 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--out_dir", default="data", type=str)
     p.add_argument("--train_atomic", type=int, default=8000,
-                   help="#graphs with 1-hop path (train)")
+                   help="num of graphs (train)")
     p.add_argument("--val_atomic", type=int, default=1000,
-                   help="#graphs with 1-hop path (val)")
+                   help="num of graphs (val)")
     p.add_argument("--test_compositionality", type=int, default=4096,
-                   help="#graphs with 2-hop path (zero-shot test)")
+                   help="num of graphs (zero-shot test)")
     p.add_argument("--num_nodes_atomic", type=int, default=5,
-                   help="num_nodes for 1-hop graphs")
+                   help="num_nodes for train/val graphs")
     p.add_argument("--num_nodes_composionality", type=int, default=5,
-                   help="num_nodes for 2-hop graphs")
+                   help="num_nodes for zero-shot graphs")
     p.add_argument("--extra_degree", type=float, default=0.5)
     args = p.parse_args()
 
-    print("Generating atomic 1-hop train...")
+    print("Generating atomic train data...")
     train_atomic = generate_set(args.train_atomic, 1, args.num_nodes_atomic, args.extra_degree, seed=123)
-    print("Generating atomic 1-hop val...")
+    print("Generating atomic validation data...")
     val_atomic   = generate_set(args.val_atomic, 1, args.num_nodes_atomic, args.extra_degree, seed=456)
-    print("Generating compositional 2-hop test...")
+    print("Generating test data...")
     test_comp    = generate_set(args.test_compositionality, 2, args.num_nodes_composionality, args.extra_degree, seed=789)
 
     torch.save(train_atomic, f"{args.out_dir}/atomic_train.pt")
     torch.save(val_atomic, f"{args.out_dir}/atomic_val.pt")
-    torch.save(test_comp, f"{args.out_dir}/v2_4hops_5nodes_compositionality_test.pt")
+    torch.save(test_comp, f"{args.out_dir}/compositionality_test.pt")
     print("Saved datasets to", args.out_dir)
