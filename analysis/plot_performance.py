@@ -858,45 +858,17 @@ def create_ablation_test_accuracy_plot(ablation_files, save_path: str = None):
 
 if __name__ == "__main__":
     csv_list = [
-        # "logs/csv/2025-06-16/gamesize5_bee_gs_seed42.csv",
-        # "logs/csv/2025-06-16/gamesize5_bee_gs_seed123.csv",
-        # "logs/csv/2025-06-16/gamesize5_bee_gs_seed2025.csv",
-        # "logs/csv/2025-06-16/gamesize10_bee_gs_seed42.csv",
-        # "logs/csv/2025-06-16/gamesize10_bee_gs_seed123.csv",
-        # "logs/csv/2025-06-16/gamesize10_bee_gs_seed2025.csv",
-        # "logs/csv/2025-06-16/gamesize20_bee_gs_seed42.csv",
-        # "logs/csv/2025-06-16/gamesize20_bee_gs_seed123.csv",
-        # "logs/csv/2025-06-16/gamesize20_bee_gs_seed2025.csv",
-        # "logs/csv/2025-06-16/gamesize5_human_gs_seed42.csv",
-        # "logs/csv/2025-06-16/gamesize5_human_gs_seed123.csv",
-        # "logs/csv/2025-06-16/gamesize5_human_gs_seed2025.csv",
-        # "logs/csv/2025-06-16/gamesize10_human_gs_seed42.csv",
-        # "logs/csv/2025-06-16/gamesize10_human_gs_seed123.csv",
-        # "logs/csv/2025-06-16/gamesize10_human_gs_seed2025.csv",
-        # "logs/csv/2025-06-16/gamesize20_human_gs_seed42.csv",
-        # "logs/csv/2025-06-16/gamesize20_human_gs_seed123.csv",
-        # "logs/csv/2025-06-16/gamesize20_human_gs_seed2025.csv",
-        # "logs/csv/2025-06-16/maxlen2_human_gs_seed42.csv",
-        # "logs/csv/2025-06-16/maxlen4_human_gs_seed42.csv",
-        # "logs/csv/2025-06-16/maxlen6_human_gs_seed42.csv"
-        "logs/csv/2025-06-22/maxlen2_human_gs_seed42.csv",
-        "logs/csv/2025-06-23/maxlen2_human_gs_seed123.csv",
-        "logs/csv/2025-06-23/maxlen2_human_gs_seed2025.csv",
-        # "logs/csv/2025-06-22/maxlen4_human_gs_seed42.csv",
-        "logs/csv/2025-06-23/maxlen4_human_gs_seed123.csv",
-        "logs/csv/2025-06-23/maxlen4_human_gs_seed2025.csv",
-        "logs/csv/2025-06-22/maxlen6_human_gs_seed42.csv",
-        "logs/csv/2025-06-23/maxlen6_human_gs_seed123.csv",
-        "logs/csv/2025-06-23/maxlen6_human_gs_seed2025.csv",
-        "logs/csv/2025-06-22/maxlen10_human_gs_seed42.csv",
-        "logs/csv/2025-06-23/maxlen10_human_gs_seed123.csv",
-        "logs/csv/2025-06-23/maxlen10_human_gs_seed2025.csv"
+       "logs/csv/2025-08-04/5nodes_systematic_dist_bee_seed42.csv",
+       "logs/csv/2025-08-04/5nodes_systematic_dist_bee_seed27.csv",
+       "logs/csv/2025-08-04/5nodes_systematic_dist_bee_seed31.csv",
+       "logs/csv/2025-08-04/5nodes_systematic_dist_bee_seed2025.csv",
+       "logs/csv/2025-08-04/5nodes_systematic_dist_bee_seed123.csv"
     ]
 
-    # plot_accuracies_over_epochs(
-    #     csv_files=csv_list,
-    #     title="Mean Accuracy Over Epochs in Human"
-    # )
+    plot_accuracies_over_epochs(
+        csv_files=csv_list,
+        title="Mean Accuracy Over Epochs"
+    )
 
     # plot_losses_over_epochs(csv_files=csv_list, title="Mean Loss Over Epochs in Human")
 
@@ -985,10 +957,10 @@ if __name__ == "__main__":
         ]
     }
 
-    create_test_accuracy_bar_plot(
-        file_paths=files,
-        save_path="test_communication_success.png"
-    )
+    # create_test_accuracy_bar_plot(
+    #     file_paths=files,
+    #     save_path="test_communication_success.png"
+    # )
 
     vary_maxlen_vocab_filepaths = [
         "logs/csv/2025-07-07/maxlen2_vocab20_human_gs_seed42.csv",
@@ -1054,10 +1026,10 @@ if __name__ == "__main__":
         "logs/csv/2025-06-23/maxlen10_human_gs_seed2025.csv"
     ]
 
-    fig, ax = create_human_vocab_maxlen_plot(
-        vary_maxlen_vocab_filepaths,
-        save_path="human_communication_maxlen_vocab_plot.png"
-    )
+    # fig, ax = create_human_vocab_maxlen_plot(
+    #     vary_maxlen_vocab_filepaths,
+    #     save_path="human_communication_maxlen_vocab_plot.png"
+    # )
 
     ablation_files = {
         'bee': [
@@ -1103,7 +1075,7 @@ if __name__ == "__main__":
         ]
     }
 
-    create_ablation_test_accuracy_plot(
-        ablation_files,
-        save_path="ablation_study.png"
-    )
+    # create_ablation_test_accuracy_plot(
+    #     ablation_files,
+    #     save_path="ablation_study.png"
+    # )
