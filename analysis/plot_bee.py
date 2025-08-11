@@ -29,9 +29,9 @@ proto_no_rand = protocols[:-1]
 
 readable = {
     'coordinates': 'coordinates',
-    'hop_count_distance_vector_sum_direction': 'hop count\n(direction via vector sum)',
+    'hop_count_distance_vector_sum_direction': 'step count\n(direction via vector sum)',
     'sum_distances_vector_sum_direction': 'total distance\n(direction via vector sum)',
-    'hop_count_distance_angle_direction': 'hop count\n(direction via angle)',
+    'hop_count_distance_angle_direction': 'step count\n(direction via angle)',
     'sum_distances_angle_direction': 'total distance\n(direction via angle)',
     'random': 'random'
 }
