@@ -28,10 +28,10 @@ change line 209
 to
 ```
 values = [x.aux_input[k] for x in interactions]
-                try:
-                    aux_input[k] = _check_cat(values)
-                except Exception:
-                    aux_input[k] = values
+try:
+    aux_input[k] = _check_cat(values)
+except Exception:
+    aux_input[k] = values
 ```
 
 After making the changes, reinstall EGG to reflect the modifications:
